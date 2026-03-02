@@ -1,0 +1,1360 @@
+/* DevIdle Agency – style idle mobile : panneaux arrondis, barre devises, bottom nav */
+
+:root {
+  --bg: #e8eef4;
+  --bg-scene: linear-gradient(180deg, #dbeafe 0%, #e8eef4 50%, #f1f5f9 100%);
+  --bg-card: #fff;
+  --text: #1a1a2e;
+  --text-dim: #5a6575;
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --header-blue: #1e40af;
+  --header-blue-dark: #1e3a8a;
+  --panel-dark: #1e3a5f;
+  --panel-dark-gradient: linear-gradient(180deg, #1e40af 0%, #1e3a5f 50%, #152a47 100%);
+  --panel-dark-text: #fff;
+  --cta-gradient: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%);
+  --radius: 16px;
+  --radius-sm: 12px;
+  --shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-panel: 0 4px 24px rgba(0, 0, 0, 0.2);
+  --card-border: #cbd5e1;
+  --font: 'Inter', system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  font-size: 16px;
+  color: var(--text);
+  background: var(--bg);
+  min-height: 100vh;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app {
+  max-width: 420px;
+  margin: 0 auto;
+  min-height: 100vh;
+  padding: 16px;
+}
+
+/* ---- Login ---- */
+.login-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 80vh;
+}
+
+.login-card {
+  width: 100%;
+  background: var(--bg-card);
+  padding: 24px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.login-card h1 {
+  margin: 0 0 4px;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.tagline {
+  margin: 0 0 24px;
+  color: var(--text-dim);
+  font-size: 0.9rem;
+}
+
+.login-form label {
+  display: block;
+  margin-top: 12px;
+  margin-bottom: 4px;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.login-form input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-family: inherit;
+}
+
+.login-form input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.login-error {
+  margin-top: 12px;
+  color: var(--error);
+  font-size: 0.9rem;
+}
+
+.login-actions {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ---- Boutons ---- */
+.btn {
+  width: 100%;
+  padding: 14px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: transform 0.08s ease, background 0.15s ease;
+}
+
+.btn:active {
+  transform: scale(0.98);
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: var(--primary-hover);
+}
+
+.btn-secondary {
+  background: var(--secondary);
+  color: #fff;
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 0.9rem;
+}
+
+.btn-logout {
+  width: auto;
+  padding: 8px 12px;
+  margin-top: 4px;
+}
+
+/* ---- Écran jeu : style idle mobile ---- */
+.game-screen {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding-bottom: 72px;
+}
+
+/* Barre du haut (crédits, prod/s, niveau) */
+.game-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--panel-dark);
+  color: var(--panel-dark-text);
+  padding: 12px 16px;
+  border-radius: 0 0 var(--radius) var(--radius);
+  box-shadow: var(--shadow-panel);
+  margin: 0 -16px 16px -16px;
+}
+.topbar-currency {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.currency-icon {
+  font-size: 1.2rem;
+}
+.currency-value {
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+.topbar-income {
+  font-size: 0.9rem;
+}
+.income-value { font-weight: 700; }
+.income-unit { opacity: 0.9; }
+.topbar-level {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.level-label { font-size: 0.8rem; opacity: 0.9; }
+.level-value { font-weight: 700; }
+.topbar-settings {
+  background: transparent;
+  border: none;
+  padding: 6px;
+  font-size: 1.2rem;
+  cursor: pointer;
+  opacity: 0.9;
+}
+.topbar-settings:active { opacity: 1; }
+
+/* Zone centrale : CTA + XP */
+.game-main {
+  flex: 1;
+}
+.game-hero {
+  background: var(--bg-card);
+  padding: 20px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  margin-bottom: 16px;
+  text-align: center;
+}
+.hero-cta {
+  width: 100%;
+  padding: 28px 20px;
+  background: var(--cta-gradient);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 1.25rem;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  box-shadow: 0 6px 16px rgba(234, 88, 12, 0.35);
+  transition: transform 0.08s ease, box-shadow 0.15s ease;
+}
+.hero-cta:active {
+  transform: scale(0.98);
+}
+.hero-cta-text { display: block; }
+.hero-cta-badge {
+  display: block;
+  font-size: 0.95rem;
+  opacity: 0.95;
+  margin-top: 6px;
+}
+.hero-xp {
+  margin-top: 14px;
+}
+.hero-xp .xp-bar {
+  height: 10px;
+  background: #e5e7eb;
+  border-radius: 5px;
+  overflow: hidden;
+}
+.hero-xp .xp-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #2563eb, #7c3aed);
+  border-radius: 5px;
+  transition: width 0.2s ease;
+}
+.hero-xp .xp-text {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+
+/* Panneau Équipe (grille cartes) */
+.game-panel {
+  background: var(--panel-dark);
+  color: var(--panel-dark-text);
+  padding: 18px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-panel);
+}
+.panel-title {
+  margin: 0 0 6px;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+.panel-desc {
+  margin: 0 0 14px;
+  font-size: 0.85rem;
+  opacity: 0.9;
+}
+.panel-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+/* Cartes employés (style boutique) */
+.upgrade-card {
+  background: var(--bg-card);
+  color: var(--text);
+  border: 2px solid rgba(255,255,255,0.25);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  text-align: center;
+  font-family: inherit;
+  cursor: pointer;
+  transition: transform 0.08s ease, box-shadow 0.15s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.upgrade-card:hover:not(.disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.12);
+}
+.upgrade-card:active:not(.disabled) {
+  transform: scale(0.98);
+}
+.upgrade-card.disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.upgrade-card .card-icon {
+  font-size: 2rem;
+  line-height: 1;
+}
+.upgrade-card .name {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+.upgrade-card .desc {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  line-height: 1.2;
+}
+.upgrade-card .row {
+  margin-top: 4px;
+  font-size: 0.85rem;
+}
+.upgrade-card .price {
+  font-weight: 700;
+  color: #ea580c;
+}
+
+/* Bottom nav */
+.game-bottomnav {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  background: var(--panel-dark);
+  color: var(--panel-dark-text);
+  padding: 12px 16px;
+  border-radius: var(--radius) var(--radius) 0 0;
+  box-shadow: 0 -4px 20px rgba(0,0,0,0.1);
+}
+.nav-item {
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+.nav-item.active {
+  background: rgba(255,255,255,0.2);
+}
+.nav-item:not(.active) {
+  opacity: 0.7;
+}
+
+/* ========== Design type référence (header bleu, Super Pack, bottom nav) ========== */
+body.game-active #game-screen {
+  display: flex !important;
+  flex-direction: column;
+  min-height: 100vh;
+  padding-bottom: 68px;
+  background: var(--bg-scene);
+}
+/* ----- Barre du haut type "header jeu" : bleu, une ligne, devises + engrenage ----- */
+body.game-active #game-screen .header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  background: var(--header-blue);
+  color: var(--panel-dark-text);
+  padding: 10px 14px;
+  border-radius: 0 0 var(--radius) var(--radius);
+  box-shadow: 0 4px 12px rgba(30, 64, 175, 0.4);
+  margin: 0 -16px 14px 0;
+  border-bottom: none;
+  text-align: left;
+}
+body.game-active #game-screen .header h1 {
+  width: 100%;
+  margin: 0 0 6px;
+  font-size: 1rem;
+  font-weight: 700;
+  opacity: 0.95;
+}
+body.game-active #game-screen .chapter-badge {
+  order: -1;
+  margin: 0;
+  padding: 2px 8px;
+  font-size: 0.7rem;
+  background: rgba(255,255,255,0.2);
+  border-radius: 20px;
+}
+body.game-active #game-screen .stats-row {
+  flex: 1;
+  justify-content: flex-start;
+  gap: 14px 18px;
+  align-items: center;
+}
+body.game-active #game-screen .stat { flex-direction: row; align-items: baseline; gap: 4px; }
+body.game-active #game-screen .credits-stat::before { content: '💰'; margin-right: 2px; font-size: 1rem; }
+body.game-active #game-screen .stat-label { color: rgba(255,255,255,0.9); font-size: 0.75rem; }
+body.game-active #game-screen .stat-value { color: #fff; font-size: 1rem; font-weight: 700; }
+body.game-active #game-screen .income { color: rgba(255,255,255,0.95); }
+body.game-active #game-screen .stat-unit { color: rgba(255,255,255,0.85); font-size: 0.75rem; }
+body.game-active #game-screen .xp-stat { min-width: auto; }
+body.game-active #game-screen .xp-bar {
+  width: 52px;
+  height: 6px;
+  background: rgba(255,255,255,0.25);
+  border-radius: 3px;
+  overflow: hidden;
+}
+body.game-active #game-screen .xp-fill {
+  background: linear-gradient(90deg, #93c5fd, #c4b5fd);
+  border-radius: 3px;
+}
+/* ----- Zone principale : bouton CTA type "BOOST" ----- */
+body.game-active #game-screen .clicker-section { margin-bottom: 14px; }
+body.game-active #game-screen .btn-code {
+  min-height: auto;
+  padding: 22px 18px;
+  background: var(--cta-gradient);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 1.15rem;
+  font-weight: 700;
+  box-shadow: 0 6px 20px rgba(234, 88, 12, 0.4);
+  transition: transform 0.08s ease, box-shadow 0.15s ease;
+}
+body.game-active #game-screen .btn-code:active { transform: scale(0.98); }
+body.game-active #game-screen .btn-code-text { display: block; }
+body.game-active #game-screen .click-value {
+  display: block;
+  font-size: 0.9rem;
+  opacity: 0.95;
+  margin-top: 4px;
+}
+body.game-active #game-screen .event-banner { border-radius: var(--radius-sm); margin-bottom: 10px; }
+body.game-active #game-screen .quests-section { margin-bottom: 10px; }
+body.game-active #game-screen .quests-section h2 { font-size: 0.9rem; }
+/* ----- Bottom nav : barre bleue avec icônes (style référence) ----- */
+body.game-active #game-screen .shop-tabs {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 480px;
+  justify-content: space-around;
+  align-items: center;
+  background: var(--header-blue-dark);
+  color: var(--panel-dark-text);
+  padding: 10px 6px 10px 6px;
+  border-radius: var(--radius) var(--radius) 0 0;
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.25);
+  margin: 0;
+  gap: 2px;
+  z-index: 100;
+}
+body.game-active #game-screen .shop-tabs .tab-btn {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 4px;
+  background: transparent;
+  color: rgba(255,255,255,0.8);
+  font-size: 0.7rem;
+  font-weight: 600;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+body.game-active #game-screen .shop-tabs .tab-btn::before {
+  font-size: 1.2rem;
+  line-height: 1;
+}
+body.game-active #game-screen .shop-tabs .tab-btn[data-tab="employes"]::before { content: '👥'; }
+body.game-active #game-screen .shop-tabs .tab-btn[data-tab="bureaux"]::before { content: '🏢'; }
+body.game-active #game-screen .shop-tabs .tab-btn[data-tab="image"]::before { content: '🖼️'; }
+body.game-active #game-screen .shop-tabs .tab-btn[data-tab="international"]::before { content: '🌍'; }
+body.game-active #game-screen .shop-tabs .tab-btn[data-tab="contrats"]::before { content: '📋'; }
+body.game-active #game-screen .shop-tabs .tab-btn[data-tab="rnd"]::before { content: '🔬'; }
+body.game-active #game-screen .shop-tabs .tab-btn.active {
+  background: rgba(255,255,255,0.18);
+  color: #fff;
+}
+/* ----- Panneaux type "Super Pack" : fond bleu dégradé, cartes blanches bordure grise ----- */
+body.game-active #game-screen .tab-panel {
+  background: var(--panel-dark-gradient);
+  color: var(--panel-dark-text);
+  padding: 18px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-panel);
+  margin-bottom: 14px;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+body.game-active #game-screen .section-subtitle {
+  color: #fff;
+  font-size: 1.1rem;
+  margin: 16px 0 8px;
+  font-weight: 700;
+}
+body.game-active #game-screen .section-subtitle:first-child { margin-top: 0; }
+body.game-active #game-screen .tab-desc { color: rgba(255,255,255,0.88); font-size: 0.84rem; margin-bottom: 12px; }
+body.game-active #game-screen .recruitment-cap { color: rgba(255,255,255,0.9); margin: 8px 0 12px; }
+body.game-active #game-screen .upgrades-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+body.game-active #game-screen #upgrades-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  grid-template-columns: 1fr;
+}
+body.game-active #game-screen .upgrade-card-wrapper {
+  grid-column: span 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+/* Cartes achats directs : style référence (horizontale, icône à gauche, prix en pilule à droite) */
+body.game-active #game-screen #upgrades-list .upgrade-card {
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--card-border);
+  border-radius: 14px;
+  padding: 14px 16px;
+  transition: transform 0.08s ease, box-shadow 0.15s ease;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-rows: auto auto;
+  gap: 4px 14px;
+  align-items: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  font-family: inherit;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+}
+body.game-active #game-screen #upgrades-list .upgrade-card::before {
+  grid-column: 1;
+  grid-row: 1 / -1;
+  font-size: 2.25rem;
+  line-height: 1;
+}
+body.game-active #game-screen #upgrades-list .upgrade-card[data-upgrade="stagiaire"]::before { content: '🎓'; }
+body.game-active #game-screen #upgrades-list .upgrade-card[data-upgrade="dev"]::before { content: '💻'; }
+body.game-active #game-screen #upgrades-list .upgrade-card[data-upgrade="devSenior"]::before { content: '🧑‍💼'; }
+body.game-active #game-screen #upgrades-list .upgrade-card[data-upgrade="serveur"]::before { content: '🖥️'; }
+body.game-active #game-screen #upgrades-list .upgrade-card[data-upgrade="cto"]::before { content: '👔'; }
+body.game-active #game-screen #upgrades-list .upgrade-card:hover:not(.disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+  border-color: #94a3b8;
+}
+body.game-active #game-screen #upgrades-list .upgrade-card .name {
+  grid-column: 2;
+  grid-row: 1;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+body.game-active #game-screen #upgrades-list .upgrade-card .desc {
+  grid-column: 2;
+  grid-row: 2;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  line-height: 1.25;
+}
+body.game-active #game-screen #upgrades-list .upgrade-card .row {
+  grid-column: 3;
+  grid-row: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 4px;
+}
+body.game-active #game-screen #upgrades-list .upgrade-card .count {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+/* Bouton prix en pilule (bleu si abordable, gris si trop cher) */
+body.game-active #game-screen #upgrades-list .upgrade-card .price {
+  display: inline-block;
+  padding: 8px 14px;
+  border-radius: 9999px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  background: #2563eb;
+  color: #fff;
+  white-space: nowrap;
+}
+body.game-active #game-screen #upgrades-list .upgrade-card .price.too-expensive {
+  background: #e2e8f0;
+  color: #64748b;
+}
+/* Bouton Promouvoir sous la carte */
+body.game-active #game-screen #upgrades-list .promote-btn {
+  padding: 8px 12px;
+  border: 1px solid var(--primary);
+  border-radius: var(--radius-sm);
+  background: rgba(37, 99, 235, 0.1);
+  color: var(--primary);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+}
+body.game-active #game-screen #upgrades-list .promote-btn:hover {
+  background: rgba(37, 99, 235, 0.2);
+}
+/* Cartes contrats recrutement + autres listes (managers, training, etc.) */
+body.game-active #game-screen .upgrade-card:not([data-upgrade]),
+body.game-active #game-screen .contract-card {
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  text-align: center;
+  transition: transform 0.08s ease, box-shadow 0.15s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+body.game-active #game-screen .upgrade-card:not([data-upgrade]):hover:not(.disabled):not([disabled]),
+body.game-active #game-screen .contract-card:hover:not([disabled]) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+  border-color: #94a3b8;
+}
+body.game-active #game-screen .upgrade-card .name,
+body.game-active #game-screen .contract-card .name { font-weight: 700; font-size: 0.95rem; }
+body.game-active #game-screen .upgrade-card .desc,
+body.game-active #game-screen .contract-card .desc { font-size: 0.8rem; color: var(--text-dim); }
+body.game-active #game-screen .upgrade-card .price,
+body.game-active #game-screen .contract-card .price { font-weight: 700; color: #ea580c; }
+body.game-active #game-screen .employees-list { display: flex; flex-direction: column; gap: 10px; }
+body.game-active #game-screen .employee-row {
+  background: rgba(255,255,255,0.12);
+  border-radius: var(--radius-sm);
+  border-left: 4px solid #00d9a5;
+}
+body.game-active #game-screen .reputation-shop,
+body.game-active #game-screen .best-run,
+body.game-active #game-screen .prestige-section {
+  background: var(--panel-dark-gradient);
+  color: var(--panel-dark-text);
+  padding: 14px 18px;
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+body.game-active #game-screen .footer {
+  margin-top: auto;
+  padding: 12px 0;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+
+/* ----- Pop-ups style référence : blanc, coins très arrondis, ombre, X rouge ----- */
+body.game-active .modal-overlay {
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+}
+body.game-active .modal.modal-popup {
+  background: #fff;
+  border-radius: 24px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+  padding: 24px;
+  max-width: 360px;
+  width: 100%;
+  position: relative;
+  border: none;
+}
+body.game-active .modal.modal-popup .modal-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 10px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: background 0.15s ease, transform 0.08s ease;
+}
+body.game-active .modal.modal-popup .modal-close:hover {
+  background: #b91c1c;
+  transform: scale(1.05);
+}
+body.game-active .modal.modal-popup .modal-title {
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin: 0 0 4px;
+  padding-right: 44px;
+  color: #1a1a2e;
+}
+body.game-active .modal.modal-popup.modal-no-close .modal-title {
+  padding-right: 0;
+}
+body.game-active .modal.modal-popup .modal-subtitle {
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--text-dim);
+  margin: 0 0 16px;
+}
+body.game-active .modal.modal-popup p:not(.modal-subtitle):not(.error-message):not(.error-modal-name) {
+  margin: 0 0 16px;
+  font-size: 0.9rem;
+  color: var(--text-dim);
+}
+body.game-active .modal.modal-popup .levelup-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+body.game-active .modal.modal-popup .levelup-choice {
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 2px solid var(--card-border);
+  background: #fff;
+  color: var(--text);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s, box-shadow 0.15s;
+}
+body.game-active .modal.modal-popup .levelup-choice:hover {
+  border-color: var(--primary);
+  background: rgba(37, 99, 235, 0.06);
+  box-shadow: 0 2px 12px rgba(37, 99, 235, 0.15);
+}
+body.game-active .modal.modal-popup .levelup-choice.selected {
+  border-color: var(--primary);
+  background: rgba(37, 99, 235, 0.15);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.3);
+}
+body.game-active .modal.modal-popup .levelup-choice .choice-name {
+  font-weight: 700;
+  display: block;
+  margin-bottom: 4px;
+}
+body.game-active .modal.modal-popup .levelup-choice .choice-desc {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+body.game-active .modal.modal-popup .levelup-validate-btn {
+  display: block;
+  width: 100%;
+  margin-top: 16px;
+  padding: 14px 20px;
+  font-size: 1rem;
+  font-weight: 700;
+  border-radius: 14px;
+  border: none;
+  background: var(--primary);
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.08s;
+}
+body.game-active .modal.modal-popup .levelup-validate-btn:hover:not(:disabled) {
+  background: var(--primary-hover);
+  transform: translateY(-1px);
+}
+body.game-active .modal.modal-popup .levelup-validate-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ========== Design TapStorm 100% : thème sombre violet ========== */
+body.tapstorm-theme {
+  background: #1a1625;
+  color: #f1f1f4;
+}
+body.tapstorm-theme .app-wrapper {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 0 16px 24px;
+  min-height: 100vh;
+}
+body.tapstorm-theme #game-screen.app {
+  background: #0f0e17;
+  background-image: radial-gradient(ellipse 120% 80% at 50% -20%, rgba(88, 28, 135, 0.25) 0%, transparent 50%),
+    radial-gradient(ellipse 80% 50% at 80% 50%, rgba(30, 27, 75, 0.4) 0%, transparent 50%);
+  min-height: 100vh;
+  padding-bottom: 88px;
+  padding-left: 0;
+  padding-right: 0;
+}
+/* Header style Rocket Rush : une barre claire, titre + devise + profit/h */
+body.tapstorm-theme #game-screen .idle-header {
+  background: linear-gradient(180deg, #1e1b2e 0%, #161424 100%);
+  border-radius: 0 0 20px 20px;
+  padding: 12px 16px 14px;
+  margin: 0 -16px 20px -16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+}
+body.tapstorm-theme #game-screen .header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+body.tapstorm-theme #game-screen .header-row-main {
+  margin-bottom: 10px;
+}
+body.tapstorm-theme #game-screen .header-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.02em;
+}
+body.tapstorm-theme #game-screen .header-currency {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 6px 12px;
+  border-radius: 9999px;
+  border: 1px solid rgba(251, 191, 36, 0.35);
+}
+body.tapstorm-theme #game-screen .header-coin {
+  font-size: 1.15rem;
+}
+body.tapstorm-theme #game-screen .header-credits {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #fbbf24;
+  font-variant-numeric: tabular-nums;
+}
+body.tapstorm-theme #game-screen .header-row-stats {
+  font-size: 0.85rem;
+}
+body.tapstorm-theme #game-screen .header-level {
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 600;
+}
+body.tapstorm-theme #game-screen .header-chapter {
+  background: rgba(139, 92, 246, 0.35);
+  color: #fff;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+}
+body.tapstorm-theme #game-screen .header-profit {
+  color: #86efac;
+  font-weight: 600;
+}
+body.tapstorm-theme #game-screen .header-profit-value {
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+body.tapstorm-theme #game-screen .stats-row-compact {
+  display: none;
+}
+/* Main + panels */
+body.tapstorm-theme #game-screen .tapstorm-main {
+  padding: 0 16px;
+  flex: 1;
+  min-height: 280px;
+}
+body.tapstorm-theme #game-screen .tapstorm-panel {
+  padding: 20px 0 24px;
+  min-height: 240px;
+  background: transparent;
+  box-shadow: none;
+  border: none;
+  border-radius: 0;
+}
+body.tapstorm-theme #game-screen .tapstorm-panel .panel-title:first-child {
+  margin-top: 0;
+}
+body.tapstorm-theme #game-screen .panel-title {
+  color: #fff;
+  font-size: 1.12rem;
+  font-weight: 700;
+  margin: 0 0 14px;
+  letter-spacing: 0.01em;
+}
+body.tapstorm-theme #game-screen .panel-title-spaced {
+  margin-top: 28px;
+  margin-bottom: 14px;
+}
+body.tapstorm-theme #game-screen .section-subtitle {
+  color: #c4b5fd;
+  font-size: 1rem;
+  margin: 24px 0 12px;
+  font-weight: 600;
+}
+body.tapstorm-theme #game-screen .tab-desc,
+body.tapstorm-theme #game-screen .recruitment-cap {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.9rem;
+  margin-bottom: 14px;
+  line-height: 1.4;
+}
+body.tapstorm-theme #game-screen .recruitment-actions {
+  margin-bottom: 12px;
+}
+body.tapstorm-theme #game-screen .recruitment-actions .tapstorm-btn {
+  width: 100%;
+}
+/* CTA principal (Accueil) */
+body.tapstorm-theme #game-screen .tapstorm-cta {
+  width: 100%;
+  padding: 20px 24px;
+  background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
+  color: #fff;
+  border: none;
+  border-radius: 20px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(124, 58, 237, 0.4);
+  transition: transform 0.08s ease, box-shadow 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+body.tapstorm-theme #game-screen .tapstorm-cta:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(124, 58, 237, 0.5);
+}
+body.tapstorm-theme #game-screen .clicker-section {
+  margin-bottom: 8px;
+}
+body.tapstorm-theme #game-screen .click-value {
+  font-size: 0.95rem;
+  opacity: 0.95;
+}
+/* Boutons secondaires */
+body.tapstorm-theme #game-screen .tapstorm-btn {
+  padding: 12px 20px;
+  border-radius: 14px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  border: none;
+  transition: transform 0.08s, box-shadow 0.15s;
+}
+body.tapstorm-theme #game-screen .tapstorm-btn-primary {
+  background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
+  color: #fff;
+}
+body.tapstorm-theme #game-screen .tapstorm-btn-secondary {
+  background: rgba(139, 92, 246, 0.25);
+  color: #e9d5ff;
+  border: 1px solid rgba(139, 92, 246, 0.5);
+}
+body.tapstorm-theme #game-screen .tapstorm-btn-secondary:hover {
+  background: rgba(139, 92, 246, 0.4);
+}
+/* Cartes TapStorm (fond gris foncé, bordure violette) */
+body.tapstorm-theme #game-screen .tapstorm-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+body.tapstorm-theme #game-screen .tapstorm-card {
+  background: rgba(45, 27, 105, 0.5);
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  border-radius: 16px;
+  padding: 18px 16px;
+  margin-bottom: 16px;
+  color: #f1f1f4;
+  font-size: 0.95rem;
+}
+body.tapstorm-theme #game-screen .best-run p,
+body.tapstorm-theme #game-screen .prestige-desc {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.85);
+}
+body.tapstorm-theme #game-screen .prestige-section .tapstorm-btn {
+  margin-bottom: 10px;
+}
+body.tapstorm-theme #game-screen .upgrade-card-wrapper {
+  margin-bottom: 0;
+}
+body.tapstorm-theme #game-screen .upgrade-card,
+body.tapstorm-theme #game-screen .contract-card {
+  background: rgba(30, 22, 37, 0.9);
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  border-radius: 14px;
+  color: #f1f1f4;
+  padding: 14px 16px;
+  transition: transform 0.08s, box-shadow 0.15s, border-color 0.15s;
+}
+body.tapstorm-theme #game-screen .upgrade-card:hover:not(.disabled),
+body.tapstorm-theme #game-screen .contract-card:hover:not([disabled]) {
+  border-color: #8b5cf6;
+  box-shadow: 0 4px 20px rgba(139, 92, 246, 0.25);
+  transform: translateY(-1px);
+}
+body.tapstorm-theme #game-screen .upgrade-card .name,
+body.tapstorm-theme #game-screen .contract-card .name {
+  color: #fff;
+  font-weight: 700;
+}
+body.tapstorm-theme #game-screen .upgrade-card .desc,
+body.tapstorm-theme #game-screen .contract-card .desc {
+  color: #a5b4fc;
+}
+body.tapstorm-theme #game-screen .upgrade-card .price,
+body.tapstorm-theme #game-screen .contract-card .price {
+  color: #fbbf24;
+  font-weight: 700;
+}
+/* Achats directs : layout horizontal + pilule violette */
+body.tapstorm-theme #game-screen #upgrades-list .upgrade-card {
+  background: rgba(30, 22, 37, 0.95);
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-rows: auto auto;
+  gap: 4px 14px;
+  align-items: center;
+  text-align: left;
+}
+body.tapstorm-theme #game-screen #upgrades-list .upgrade-card .price {
+  background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
+  color: #fff;
+  padding: 8px 14px;
+  border-radius: 9999px;
+  font-size: 0.9rem;
+}
+body.tapstorm-theme #game-screen #upgrades-list .upgrade-card .price.too-expensive {
+  background: rgba(100, 116, 139, 0.5);
+  color: #94a3b8;
+}
+body.tapstorm-theme #game-screen #upgrades-list .promote-btn {
+  background: rgba(139, 92, 246, 0.2);
+  border: 1px solid #8b5cf6;
+  color: #e9d5ff;
+  border-radius: 12px;
+}
+/* Équipe / employés */
+body.tapstorm-theme #game-screen .employee-row {
+  background: rgba(45, 27, 105, 0.5);
+  border-radius: 12px;
+  border-left: 4px solid #8b5cf6;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  color: #f1f1f4;
+}
+/* Objectifs */
+body.tapstorm-theme #game-screen .quests-section {
+  margin-top: 20px;
+}
+body.tapstorm-theme #game-screen .quests-section .panel-title {
+  margin-bottom: 14px;
+}
+body.tapstorm-theme #game-screen .quests-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+body.tapstorm-theme #game-screen .quests-list .quest-item,
+body.tapstorm-theme #game-screen .quests-list > * {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(30, 22, 37, 0.85);
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  border-radius: 14px;
+  padding: 14px 16px;
+  color: #f1f1f4;
+  font-size: 0.95rem;
+}
+body.tapstorm-theme #game-screen .quests-list .quest-item .quest-progress {
+  font-size: 0.85rem;
+  color: #a5b4fc;
+  font-weight: 600;
+}
+body.tapstorm-theme #game-screen .quests-list .quest-item.done .quest-progress {
+  color: #34d399;
+}
+/* Bottom nav TapStorm */
+/* Bottom nav style Rocket Rush : barre sombre, icônes + libellés lisibles */
+body.tapstorm-theme #game-screen .tapstorm-nav {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 480px;
+  background: #12101a;
+  border-radius: 20px 20px 0 0;
+  padding: 10px 6px 14px;
+  padding-bottom: max(14px, env(safe-area-inset-bottom));
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  justify-content: space-around;
+  align-items: flex-end;
+  gap: 0;
+  z-index: 100;
+}
+body.tapstorm-theme #game-screen .tapstorm-nav .tab-btn {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 4px 2px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.65);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+body.tapstorm-theme #game-screen .tapstorm-nav .tab-btn .nav-icon {
+  font-size: 1.25rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+body.tapstorm-theme #game-screen .tapstorm-nav .tab-btn .nav-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  line-height: 1.1;
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
+  color: inherit;
+}
+body.tapstorm-theme #game-screen .tapstorm-nav .tab-btn.active {
+  background: rgba(139, 92, 246, 0.25);
+  color: #fff;
+}
+body.tapstorm-theme #game-screen .tapstorm-nav .tab-btn.active .nav-label {
+  color: #e9d5ff;
+}
+body.tapstorm-theme #game-screen .tapstorm-nav .tab-btn:active:not(.active) {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* Bouton clic global (style idle : action principale toujours visible) */
+body.tapstorm-theme #game-screen .nav-click-btn {
+  position: relative;
+  z-index: 2;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  background: linear-gradient(145deg, #f59e0b 0%, #d97706 50%, #b45309 100%);
+  box-shadow: 0 4px 0 #92400e, 0 8px 20px rgba(0, 0, 0, 0.4);
+  color: #fff;
+  font-size: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: -20px 4px 0 4px;
+  transition: transform 0.08s ease, box-shadow 0.1s ease;
+}
+body.tapstorm-theme #game-screen .nav-click-btn:active {
+  transform: translateY(3px) scale(0.96);
+  box-shadow: 0 1px 0 #92400e, 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+/* Event banner */
+body.tapstorm-theme #game-screen .event-banner {
+  background: rgba(124, 58, 237, 0.3);
+  border: 1px solid #8b5cf6;
+  border-radius: 14px;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+  color: #fff;
+}
+/* Footer */
+body.tapstorm-theme #game-screen .tapstorm-footer {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.8rem;
+  padding: 16px 0;
+  text-align: center;
+}
+/* Réglages : Paramètres + Déconnexion */
+body.tapstorm-theme #game-screen .tapstorm-panel-settings .panel-title {
+  margin-bottom: 12px;
+}
+body.tapstorm-theme #game-screen .settings-block {
+  margin-bottom: 8px;
+}
+body.tapstorm-theme #game-screen .settings-block.tapstorm-card {
+  padding: 8px 0;
+}
+body.tapstorm-theme #game-screen .settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  gap: 16px;
+  border-bottom: 1px solid rgba(139, 92, 246, 0.2);
+}
+body.tapstorm-theme #game-screen .settings-row:last-child {
+  border-bottom: none;
+}
+body.tapstorm-theme #game-screen .settings-label {
+  color: #f1f1f4;
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+body.tapstorm-theme #game-screen .settings-toggle {
+  position: relative;
+  display: inline-block;
+  width: 48px;
+  height: 26px;
+  flex-shrink: 0;
+}
+body.tapstorm-theme #game-screen .settings-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+body.tapstorm-theme #game-screen .settings-toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background: rgba(100, 116, 139, 0.5);
+  border-radius: 9999px;
+  transition: background 0.2s;
+}
+body.tapstorm-theme #game-screen .settings-toggle-slider::before {
+  content: '';
+  position: absolute;
+  height: 20px;
+  width: 20px;
+  left: 3px;
+  bottom: 3px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+body.tapstorm-theme #game-screen .settings-toggle input:checked + .settings-toggle-slider {
+  background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
+}
+body.tapstorm-theme #game-screen .settings-toggle input:checked + .settings-toggle-slider::before {
+  transform: translateX(22px);
+}
+body.tapstorm-theme #game-screen .tapstorm-btn-danger {
+  width: 100%;
+  padding: 14px 20px;
+  background: rgba(220, 38, 38, 0.2);
+  border: 1px solid rgba(220, 38, 38, 0.6);
+  color: #fca5a5;
+  border-radius: 14px;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+body.tapstorm-theme #game-screen .tapstorm-btn-danger:hover {
+  background: rgba(220, 38, 38, 0.35);
+  border-color: #dc2626;
+  color: #fff;
+}
+body.tapstorm-theme #game-screen .settings-hint {
+  margin: 12px 0 0;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.5);
+  text-align: center;
+}
+
+/* Modales thème sombre */
+body.tapstorm-theme .modal.modal-popup {
+  background: #2d1b69;
+  border: 1px solid rgba(139, 92, 246, 0.5);
+  color: #f1f1f4;
+}
+body.tapstorm-theme .modal.modal-popup .modal-title {
+  color: #fff;
+}
+body.tapstorm-theme .modal.modal-popup .modal-subtitle,
+body.tapstorm-theme .modal.modal-popup p {
+  color: #c4b5fd;
+}
+body.tapstorm-theme .modal.modal-popup .levelup-choice {
+  background: rgba(45, 27, 105, 0.6);
+  border-color: rgba(139, 92, 246, 0.5);
+  color: #f1f1f4;
+}
+body.tapstorm-theme .modal.modal-popup .levelup-choice.selected {
+  border-color: #8b5cf6;
+  background: rgba(139, 92, 246, 0.4);
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.4);
+}
+body.tapstorm-theme .modal.modal-popup .levelup-choice:hover {
+  border-color: #8b5cf6;
+  background: rgba(139, 92, 246, 0.3);
+}
+body.tapstorm-theme .modal.modal-popup .levelup-validate-btn {
+  margin-top: 16px;
+  padding: 14px 20px;
+  background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
+  color: #fff;
+  border: none;
+  border-radius: 14px;
+  font-weight: 700;
+  font-size: 1rem;
+  cursor: pointer;
+}
+body.tapstorm-theme .modal.modal-popup .levelup-validate-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+body.tapstorm-theme .modal.modal-popup .levelup-validate-btn:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+/* ---- Screen utility : un seul écran visible (celui avec .active) ---- */
+.screen {
+  display: none;
+}
+.screen.active {
+  display: block;
+}

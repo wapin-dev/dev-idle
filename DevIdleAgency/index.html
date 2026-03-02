@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#2d1b69">
+  <meta name="description" content="DevIdle Agency - Agence AFK, jeu idle développeur">
+  <title>DevIdle Agency</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/game.css">
+  <link rel="stylesheet" href="/style.css">
+  <style>
+    body { margin: 0; font-family: Inter, system-ui, sans-serif; background: #1a1625; color: #f1f1f4; min-height: 100vh; }
+    .app-wrapper { max-width: 480px; margin: 0 auto; padding: 0 16px 24px; }
+    .screen { display: none; }
+    .screen.active { display: block; }
+  </style>
+</head>
+<body class="game-active tapstorm-theme">
+  <div class="app-wrapper">
+    <!-- Écran Login (désactivé pour l'instant : on affiche le jeu directement) -->
+    <section id="login-screen" class="screen login-screen">
+      <div class="login-card">
+        <h1>DevIdle Agency</h1>
+        <p class="tagline">Agence AFK – Idle Dev Game</p>
+        <form id="login-form" class="login-form">
+          <label for="login-email">Email</label>
+          <input type="email" id="login-email" name="email" placeholder="toi@exemple.fr" required autocomplete="email">
+          <label for="login-password">Mot de passe</label>
+          <input type="password" id="login-password" name="password" placeholder="••••••••" required autocomplete="current-password">
+          <p id="login-error" class="login-error" hidden></p>
+          <div class="login-actions">
+            <button type="submit" id="btn-login" class="btn btn-primary">Se connecter</button>
+            <button type="button" id="btn-signup" class="btn btn-secondary">S'inscrire</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- Écran Jeu complet – design TapStorm (sombre violet, onglets séparés) -->
+    <section id="game-screen" class="screen active app tapstorm-screen">
+      <header class="header idle-header">
+        <div class="header-row header-row-main">
+          <span class="header-title">DevIdle Agency</span>
+          <div class="header-currency">
+            <span class="header-coin" aria-hidden="true">🪙</span>
+            <span id="credits" class="header-credits">0</span>
+          </div>
+        </div>
+        <div class="header-row header-row-stats">
+          <span class="header-level">Niv. <span id="level">1</span></span>
+          <span class="header-chapter" id="chapter-badge">Chapitre 1</span>
+          <span class="header-profit">Profit/h <span id="income" class="header-profit-value">0</span></span>
+        </div>
+        <div class="stats-row stats-row-compact" aria-hidden="true">
+          <span id="xp-bar" class="xp-bar"><span id="xp-fill" class="xp-fill"></span></span>
+          <span id="reputation-stat" class="stat-value" hidden>0</span>
+        </div>
+      </header>
+
+      <main class="main tapstorm-main">
+        <!-- Onglet Accueil : clicker + objectifs -->
+        <section class="tab-panel tapstorm-panel" id="tab-accueil">
+          <section class="clicker-section">
+            <button type="button" id="btn-code" class="btn-code tapstorm-cta" aria-label="Coder une feature">
+              <span class="btn-code-text">Coder une feature</span>
+              <span id="click-value" class="click-value">+1</span>
+            </button>
+          </section>
+          <section class="event-banner" id="event-banner" aria-live="polite" hidden>
+            <span id="event-text"></span>
+            <span id="event-timer"></span>
+            <button type="button" id="event-action-btn" class="event-action-btn" hidden>Hotfix</button>
+          </section>
+          <section class="quests-section" id="quests-section">
+            <h2 class="panel-title">Objectifs</h2>
+            <div id="quests-list" class="quests-list"></div>
+          </section>
+        </section>
+
+        <!-- Onglet Candidats : recrutement uniquement -->
+        <section class="tab-panel tapstorm-panel" id="tab-candidats" hidden>
+          <h2 class="panel-title">Contrats disponibles</h2>
+          <p class="tab-desc">Signe un contrat pour recruter. Chaque profil a sa prod et son taux d'erreur.</p>
+          <div class="recruitment-actions">
+            <button type="button" id="recruitment-refresh-btn" class="tapstorm-btn tapstorm-btn-secondary">Nouveaux candidats</button>
+          </div>
+          <p id="recruitment-cap" class="recruitment-cap"></p>
+          <div id="recruitment-contracts-list" class="upgrades-list tapstorm-cards"></div>
+        </section>
+
+        <!-- Onglet Équipe : employés, cadres, formations -->
+        <section class="tab-panel tapstorm-panel" id="tab-equipe" hidden>
+          <h2 class="panel-title">Équipe</h2>
+          <div id="employees-list" class="employees-list"></div>
+          <h3 class="section-subtitle">Cadres</h3>
+          <div id="managers-list" class="upgrades-list tapstorm-cards"></div>
+          <h3 class="section-subtitle">Formations</h3>
+          <div id="training-list" class="upgrades-list tapstorm-cards"></div>
+        </section>
+
+        <!-- Onglet Boutique : tout ce qui s’achète -->
+        <section class="tab-panel tapstorm-panel" id="tab-boutique" hidden>
+          <h2 class="panel-title">Achats directs</h2>
+          <div id="upgrades-list" class="upgrades-list tapstorm-cards"></div>
+          <h3 class="section-subtitle">Bureaux</h3>
+          <div id="offices-list" class="upgrades-list tapstorm-cards"></div>
+          <h3 class="section-subtitle">Image</h3>
+          <div id="branding-list" class="upgrades-list tapstorm-cards"></div>
+        </section>
+
+        <!-- Onglet Plus : International, Contrats, R&D, Réputation, Prestige -->
+        <section class="tab-panel tapstorm-panel" id="tab-plus" hidden>
+          <h2 class="panel-title">International</h2>
+          <p class="tab-desc">Débloqué niveau 10+</p>
+          <div id="intl-offices-list" class="upgrades-list tapstorm-cards"></div>
+          <h2 class="panel-title">Contrats</h2>
+          <p class="tab-desc">Missions à durée limitée. Niveau 25+</p>
+          <div id="contrats-list" class="upgrades-list tapstorm-cards"></div>
+          <h2 class="panel-title">R&D</h2>
+          <p class="tab-desc">Recherche permanente. Niveau 50+</p>
+          <div id="rnd-list" class="upgrades-list tapstorm-cards"></div>
+          <section class="reputation-shop" id="reputation-shop">
+            <h2 class="panel-title">Bonus Réputation</h2>
+            <div id="reputation-list" class="upgrades-list tapstorm-cards"></div>
+          </section>
+          <section class="best-run tapstorm-card">
+            <p>Meilleur run : <span id="best-run-value">0</span> crédits</p>
+          </section>
+          <section class="prestige-section tapstorm-card" id="prestige-section">
+            <button type="button" id="btn-prestige" class="tapstorm-btn tapstorm-btn-primary btn-prestige" disabled>
+              Rebranding complet
+            </button>
+            <p class="prestige-desc" id="prestige-desc">Atteins 100K crédits pour débloquer</p>
+          </section>
+        </section>
+
+        <!-- Onglet Réglages : Paramètres + Déconnexion -->
+        <section class="tab-panel tapstorm-panel tapstorm-panel-settings" id="tab-reglages" hidden>
+          <h2 class="panel-title">Paramètres</h2>
+          <div class="settings-block tapstorm-card">
+            <div class="settings-row">
+              <span class="settings-label">Sons</span>
+              <label class="settings-toggle">
+                <input type="checkbox" id="settings-sound" checked>
+                <span class="settings-toggle-slider"></span>
+              </label>
+            </div>
+            <div class="settings-row">
+              <span class="settings-label">Notifications</span>
+              <label class="settings-toggle">
+                <input type="checkbox" id="settings-notifications">
+                <span class="settings-toggle-slider"></span>
+              </label>
+            </div>
+            <div class="settings-row">
+              <span class="settings-label">Vibrations</span>
+              <label class="settings-toggle">
+                <input type="checkbox" id="settings-vibration">
+                <span class="settings-toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+          <h2 class="panel-title panel-title-spaced">Compte</h2>
+          <div class="settings-block tapstorm-card">
+            <button type="button" id="btn-deconnexion" class="tapstorm-btn tapstorm-btn-danger">
+              Déconnexion
+            </button>
+            <p class="settings-hint">Réinitialise la partie locale et recharge l’app.</p>
+          </div>
+        </section>
+      </main>
+
+      <nav class="shop-tabs tapstorm-nav">
+        <button type="button" class="tab-btn active" data-tab="accueil"><span class="nav-icon">🏠</span><span class="nav-label">Accueil</span></button>
+        <button type="button" class="tab-btn" data-tab="candidats"><span class="nav-icon">👤</span><span class="nav-label">Candidats</span></button>
+        <button type="button" class="tab-btn" data-tab="equipe"><span class="nav-icon">👥</span><span class="nav-label">Équipe</span></button>
+        <button type="button" id="btn-code-nav" class="nav-click-btn" aria-label="Coder une feature">⚡</button>
+        <button type="button" class="tab-btn" data-tab="boutique"><span class="nav-icon">🛒</span><span class="nav-label">Boutique</span></button>
+        <button type="button" class="tab-btn" data-tab="plus"><span class="nav-icon">📋</span><span class="nav-label">Plus</span></button>
+        <button type="button" class="tab-btn" data-tab="reglages"><span class="nav-icon">⚙️</span><span class="nav-label">Réglages</span></button>
+      </nav>
+
+      <footer class="footer tapstorm-footer">
+        <p>Partie sauvegardée automatiquement</p>
+      </footer>
+
+      <div class="modal-overlay modal-require-choice" id="levelup-modal" hidden>
+        <div class="modal modal-popup modal-no-close">
+          <h3 class="modal-title">Niveau <span id="levelup-level"></span> !</h3>
+          <p class="modal-subtitle">Choisis un bonus, puis valide</p>
+          <div id="levelup-choices" class="levelup-choices"></div>
+          <button type="button" id="levelup-validate-btn" class="levelup-validate-btn" disabled>Valider</button>
+        </div>
+      </div>
+      <div class="modal-overlay" id="chapter-complete-modal" hidden>
+        <div class="modal modal-popup">
+          <button type="button" class="modal-close" id="chapter-complete-modal-close" aria-label="Fermer">&times;</button>
+          <h3 class="modal-title" id="chapter-complete-title">Chapitre terminé !</h3>
+          <p id="chapter-complete-bonus"></p>
+          <button type="button" class="levelup-choice" id="chapter-complete-ok">Continuer</button>
+        </div>
+      </div>
+      <div class="modal-overlay modal-require-choice" id="agency-event-modal" hidden>
+        <div class="modal modal-popup modal-no-close">
+          <h3 class="modal-title" id="agency-event-title">Journée d'agence</h3>
+          <p class="modal-subtitle">Choisis une option (obligatoire)</p>
+          <div id="agency-event-options" class="levelup-choices"></div>
+        </div>
+      </div>
+      <div class="modal-overlay" id="error-modal" hidden>
+        <div class="modal modal-popup">
+          <button type="button" class="modal-close" id="error-modal-close" aria-label="Fermer">&times;</button>
+          <h3 class="modal-title">Erreur en prod</h3>
+          <p id="error-modal-message" class="error-message"></p>
+          <p id="error-modal-name" class="error-modal-name"></p>
+          <p class="tab-desc">La production de cet employé (et de son équipe s'il est mentor) est bloquée pendant 30 s.</p>
+          <div class="levelup-choices">
+            <button type="button" class="levelup-choice" id="error-modal-pardonner">Pardonner</button>
+            <button type="button" class="levelup-choice levelup-choice-danger" id="error-modal-licencier">Licencier</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script src="/game.js"></script>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

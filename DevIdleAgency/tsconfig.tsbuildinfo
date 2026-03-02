@@ -1,0 +1,1 @@
+{"root":["./src/auth.ts","./src/game.ts","./src/main.ts","./src/storage.ts","./src/supabase.ts","./src/types.ts","./src/vite-env.d.ts","./vite.config.ts"],"version":"5.9.3"}
