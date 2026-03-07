@@ -2,6 +2,7 @@
   'use strict';
 
   const SAVE_KEY = 'agence-dev-idle-save-v4';
+  const SAVE_VERSION = 1;
   const TICK_MS = 100;
   const EVENT_MIN_INTERVAL_MS = 60 * 1000;
   const EVENT_MAX_INTERVAL_MS = 3 * 60 * 1000;
@@ -9,6 +10,8 @@
   const XP_PER_CREDIT = 0.001;
   const PRESTIGE_THRESHOLD = 100000;
   const RECRUITMENT_POOL_SIZE = 5;
+  const RECRUITMENT_REFRESH_MIN_COST = 25;
+  const RECRUITMENT_REFRESH_PERCENT = 0.001;
   const ERROR_ROLL_INTERVAL_MS = 45 * 1000;
   const ERROR_BLOCK_DURATION_MS = 30 * 1000;
   const MENTOR_SLOTS_JUNIOR = 2;
@@ -293,10 +296,22 @@
     renderCredits();
   }
 
+  function getRecruitmentRefreshCost() {
+    var wealth = Math.max(state.bestRunCredits || 0, state.credits || 0);
+    if (wealth <= 0) return RECRUITMENT_REFRESH_MIN_COST;
+    var cost = Math.floor(wealth * RECRUITMENT_REFRESH_PERCENT);
+    return Math.max(RECRUITMENT_REFRESH_MIN_COST, cost);
+  }
+
   function refreshRecruitmentContracts() {
+    const cost = getRecruitmentRefreshCost();
+    if (!canAfford(cost)) return;
+    state.credits -= cost;
     state.recruitmentContracts = [];
     generateRecruitmentContracts();
+    addXP(cost * 0.002);
     renderRecruitmentContracts();
+    renderCredits();
   }
 
   function employeeEffectiveProd(emp) {
@@ -393,6 +408,13 @@
     if (mentor) mentor.menteesIds = (mentor.menteesIds || []).filter((id) => id !== menteeId);
     mentee.mentorId = null;
     renderEmployeesList();
+  }
+
+  function sanitizeEmployeesMentorship() {
+    (state.employees || []).forEach(function (emp) {
+      if (emp.mentorId === emp.id) emp.mentorId = null;
+      if (Array.isArray(emp.menteesIds)) emp.menteesIds = emp.menteesIds.filter(function (id) { return id !== emp.id; });
+    });
   }
 
   function getXpToNextLevel() {
@@ -715,7 +737,8 @@
     renderCredits();
   }
 
-  function addCredits(amount) {
+  function addCredits() {
+    // Toujours basé sur le pouvoir de clic effectif (multiplicateurs inclus)
     const finalAmount = Math.max(1, Math.floor(getClickPower()) || 1);
     state.credits = (state.credits || 0) + finalAmount;
     addXP(XP_PER_CLICK);
@@ -945,6 +968,9 @@
         recruitmentContracts: state.recruitmentContracts,
         employees: state.employees,
         nextErrorRollAt: state.nextErrorRollAt,
+        lastContractRefreshAt: state.lastContractRefreshAt,
+        themeColor: state.themeColor,
+        save_version: SAVE_VERSION,
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
       state.lastSave = Date.now();
@@ -1015,6 +1041,8 @@
       });
       if (typeof data.nextErrorRollAt === 'number') state.nextErrorRollAt = data.nextErrorRollAt;
       else state.nextErrorRollAt = Date.now() + ERROR_ROLL_INTERVAL_MS;
+      if (typeof data.lastContractRefreshAt === 'number') state.lastContractRefreshAt = data.lastContractRefreshAt;
+      if (data.themeColor) state.themeColor = data.themeColor;
     } catch (e) {
       console.warn('Load failed', e);
     }
@@ -1129,19 +1157,55 @@
       }
     }
     container.innerHTML = '';
+    container.classList.add('candidates-list');
     (state.recruitmentContracts || []).forEach((c, i) => {
       const canSign = canAfford(c.cost) && canRecruitMore();
-      const card = document.createElement('button');
-      card.type = 'button';
-      card.className = 'upgrade-card contract-card';
-      card.disabled = !canSign;
-      card.innerHTML =
-        '<span class="name">' + escapeHtml(c.name) + ' — ' + (EMPLOYEE_TYPE_LABELS[c.type] || c.type) + '</span>' +
-        '<span class="desc">' + c.prodPerSec + ' créd/s · Erreur ' + (c.errorChance * 100).toFixed(1) + '%/min · ' + escapeHtml(c.trait) + '</span>' +
-        '<div class="row"><span class="count">Coût</span><span class="price' + (canSign ? '' : ' too-expensive') + '">' + formatNumber(c.cost) + ' crédits</span></div>';
-      card.addEventListener('click', () => signRecruitmentContract(i));
-      container.appendChild(card);
+      const row = document.createElement('div');
+      row.className = 'candidate-row';
+      row.setAttribute('data-index', i);
+      row.innerHTML =
+        '<div class="candidate-row-head" role="button" tabindex="0" aria-expanded="false">' +
+        '<span class="candidate-name">' + escapeHtml(c.name) + '</span>' +
+        '<span class="candidate-type-badge">' + (EMPLOYEE_TYPE_LABELS[c.type] || c.type) + '</span>' +
+        '<span class="candidate-prod">' + c.prodPerSec + ' créd/s</span>' +
+        '<span class="candidate-err">' + (c.errorChance * 100).toFixed(1) + '% err</span>' +
+        '<span class="candidate-cost' + (canSign ? '' : ' too-expensive') + '">' + formatNumber(c.cost) + '</span>' +
+        '<button type="button" class="candidate-sign">Recruter</button>' +
+        '<span class="candidate-toggle" aria-hidden="true">▼</span>' +
+        '</div>' +
+        '<div class="candidate-row-details">' +
+        '<span class="candidate-trait">Trait : ' + escapeHtml(c.trait || '—') + '</span>' +
+        '<button type="button" class="candidate-sign-detail">Recruter · ' + formatNumber(c.cost) + ' crédits</button>' +
+        '</div>';
+      container.appendChild(row);
+      var idx = i;
+      var head = row.querySelector('.candidate-row-head');
+      head.addEventListener('click', function (e) {
+        if (e.target.closest('.candidate-sign, .candidate-sign-detail')) return;
+        row.classList.toggle('expanded');
+        head.setAttribute('aria-expanded', row.classList.contains('expanded'));
+      });
+      head.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); row.classList.toggle('expanded'); head.setAttribute('aria-expanded', row.classList.contains('expanded')); }
+      });
+      row.querySelector('.candidate-sign')?.addEventListener('click', function (e) { e.stopPropagation(); signRecruitmentContract(idx); });
+      row.querySelector('.candidate-sign-detail')?.addEventListener('click', function (e) { e.stopPropagation(); signRecruitmentContract(idx); });
+      var signBtn = row.querySelector('.candidate-sign');
+      if (signBtn) signBtn.disabled = !canSign;
+      var costEl = row.querySelector('.candidate-cost');
+      if (costEl) costEl.classList.toggle('too-expensive', !canSign);
     });
+    updateRecruitmentRefreshButton();
+  }
+
+  function updateRecruitmentRefreshButton() {
+    const btn = document.getElementById('recruitment-refresh-btn');
+    if (!btn) return;
+    const cost = getRecruitmentRefreshCost();
+    const affordable = canAfford(cost);
+    btn.textContent = 'Nouveaux candidats (' + formatNumber(cost) + ' crédits)';
+    btn.disabled = !affordable;
+    btn.classList.toggle('too-expensive', !affordable);
   }
 
   function renderEmployeesList() {
@@ -1165,22 +1229,34 @@
         }
       }
       row.innerHTML =
-        '<div class="employee-info">' +
+        '<div class="employee-row-head" role="button" tabindex="0" aria-expanded="false">' +
         '<span class="employee-name">' + escapeHtml(emp.name) + '</span>' +
-        '<span class="employee-type">' + (EMPLOYEE_TYPE_LABELS[emp.type] || emp.type) + '</span>' +
-        '<span class="employee-stats">' + emp.prodPerSec + ' créd/s · ' + (emp.errorChance * 100).toFixed(1) + '% err · ' + escapeHtml(emp.trait || '') + '</span>' +
-        (emp.hasError ? '<span class="employee-status error">En erreur</span>' : '<span class="employee-status ok">OK</span>') +
-        (emp.menteesIds && emp.menteesIds.length > 0 ? '<span class="employee-mentees">Équipe: ' + emp.menteesIds.length + '/' + (emp.mentorSlots || 0) + '</span>' : '') +
-        '<span class="employee-mentor">Mentor: ' + escapeHtml(mentorLabel) + '</span>' +
-        assignHtml +
+        '<span class="employee-type-badge">' + (EMPLOYEE_TYPE_LABELS[emp.type] || emp.type) + '</span>' +
+        '<span class="employee-prod">' + emp.prodPerSec + ' créd/s</span>' +
+        (emp.hasError ? '<span class="employee-status error">Erreur</span>' : '<span class="employee-status ok">OK</span>') +
+        '<span class="employee-toggle" aria-hidden="true">▼</span>' +
         '</div>' +
-        '<div class="employee-actions">' +
-        '<button type="button" class="btn-licencier" data-id="' + emp.id + '">Licencier</button>' +
+        '<div class="employee-row-details">' +
+        '<div class="employee-detail-line"><span class="employee-detail-label">Trait:</span> ' + escapeHtml(emp.trait || '—') + ' · ' + (emp.errorChance * 100).toFixed(1) + '% err</div>' +
+        (emp.menteesIds && emp.menteesIds.length > 0 ? '<div class="employee-detail-line"><span class="employee-detail-label">Équipe:</span> ' + emp.menteesIds.length + '/' + (emp.mentorSlots || 0) + '</div>' : '') +
+        '<div class="employee-detail-line"><span class="employee-detail-label">Mentor:</span> ' + escapeHtml(mentorLabel) + '</div>' +
+        (assignHtml ? '<div class="employee-detail-actions">' + assignHtml + '</div>' : '') +
+        '<div class="employee-detail-actions"><button type="button" class="btn-licencier" data-id="' + emp.id + '">Licencier</button></div>' +
         '</div>';
       container.appendChild(row);
-      row.querySelector('.btn-licencier')?.addEventListener('click', function () { licencierEmployee(this.getAttribute('data-id')); });
-      row.querySelector('.btn-unassign')?.addEventListener('click', function () { unassignMentee(this.getAttribute('data-id')); });
-      row.querySelector('.assign-mentor-select')?.addEventListener('change', function () {
+      const head = row.querySelector('.employee-row-head');
+      const details = row.querySelector('.employee-row-details');
+      const toggleExpand = function (e) {
+        if (e.target.closest('.btn-licencier, .btn-unassign, .assign-mentor-select')) return;
+        row.classList.toggle('expanded');
+        head.setAttribute('aria-expanded', row.classList.contains('expanded'));
+      };
+      head.addEventListener('click', toggleExpand);
+      head.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleExpand(e); } });
+      row.querySelector('.btn-licencier')?.addEventListener('click', function (e) { e.stopPropagation(); licencierEmployee(this.getAttribute('data-id')); });
+      row.querySelector('.btn-unassign')?.addEventListener('click', function (e) { e.stopPropagation(); unassignMentee(this.getAttribute('data-id')); });
+      row.querySelector('.assign-mentor-select')?.addEventListener('change', function (e) {
+        e.stopPropagation();
         const mentorId = this.value;
         const menteeId = this.getAttribute('data-mentee-id');
         if (mentorId && menteeId) assignMentee(mentorId, menteeId);
@@ -1205,6 +1281,7 @@
         const perHour = (typeof prod === 'number' && !isNaN(prod) ? prod : 0) * 3600;
         incomeEl.textContent = formatNumber(perHour);
       }
+      updateRecruitmentRefreshButton();
     } catch (err) {
       console.error('renderCredits error', err);
     }
@@ -1299,20 +1376,40 @@
     const container = document.getElementById('managers-list');
     if (!container) return;
     container.innerHTML = '';
+    container.classList.add('compact-list');
     MANAGER_DEFS.forEach((def) => {
       const ms = getManagerState(def.id) || { quantity: 0 };
       const unlocked = isLevelUnlocked(def.levelReq);
       const maxed = def.maxQty && ms.quantity >= def.maxQty;
       const price = maxed ? 0 : getPrice(def, ms.quantity);
       const affordable = maxed || canAfford(price);
-      const card = document.createElement('button');
-      card.type = 'button';
-      card.className = 'upgrade-card' + (!unlocked ? ' locked' : '');
-      card.setAttribute('data-manager', def.id);
-      card.disabled = !unlocked || maxed || !affordable;
-      card.innerHTML = '<span class="name">' + escapeHtml(def.name) + (unlocked ? '' : ' (Niv.' + def.levelReq + ')') + '</span><span class="desc">' + escapeHtml(def.desc) + '</span><div class="row"><span class="count">' + (maxed ? '✓ Max' : ms.quantity + '/' + (def.maxQty || '∞')) + '</span><span class="price' + (affordable ? '' : ' too-expensive') + '">' + (maxed ? '—' : formatNumber(price) + ' crédits') + '</span></div>';
-      if (unlocked && !maxed) card.addEventListener('click', () => buyManager(def.id));
-      container.appendChild(card);
+      const row = document.createElement('div');
+      row.className = 'compact-row' + (!unlocked ? ' locked' : '');
+      row.setAttribute('data-manager', def.id);
+      row.innerHTML =
+        '<div class="compact-row-head" role="button" tabindex="0" aria-expanded="false">' +
+        '<span class="compact-row-name">' + escapeHtml(def.name) + '</span>' +
+        '<span class="compact-row-count">' + (maxed ? '✓ Max' : ms.quantity + '/' + (def.maxQty || '∞')) + '</span>' +
+        '<span class="compact-row-price' + (affordable ? '' : ' too-expensive') + '">' + (maxed ? '—' : formatNumber(price)) + '</span>' +
+        (!unlocked || maxed ? '' : '<button type="button" class="compact-row-buy">Acheter</button>') +
+        '<span class="compact-row-toggle" aria-hidden="true">▼</span>' +
+        '</div>' +
+        '<div class="compact-row-details">' +
+        '<span class="compact-row-desc">' + escapeHtml(def.desc) + '</span>' +
+        (def.levelReq ? '<span class="compact-row-req">Débloqué au niveau ' + def.levelReq + '</span>' : '') +
+        '</div>';
+      container.appendChild(row);
+      const head = row.querySelector('.compact-row-head');
+      head.addEventListener('click', function (e) {
+        if (e.target.closest('.compact-row-buy')) return;
+        row.classList.toggle('expanded');
+        head.setAttribute('aria-expanded', row.classList.contains('expanded'));
+      });
+      head.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); row.classList.toggle('expanded'); head.setAttribute('aria-expanded', row.classList.contains('expanded')); }
+      });
+      const buyBtn = row.querySelector('.compact-row-buy');
+      if (buyBtn && unlocked && !maxed) buyBtn.addEventListener('click', function (e) { e.stopPropagation(); buyManager(def.id); });
     });
   }
 
@@ -1341,19 +1438,38 @@
     const container = document.getElementById('training-list');
     if (!container) return;
     container.innerHTML = '';
+    container.classList.add('compact-list');
     TRAINING_DEFS.forEach((def) => {
       const ts = getTrainingState(def.id) || { quantity: 0 };
       const maxed = def.maxQty && ts.quantity >= def.maxQty;
       const price = maxed ? 0 : getPrice(def, ts.quantity);
       const affordable = maxed || canAfford(price);
-      const card = document.createElement('button');
-      card.type = 'button';
-      card.className = 'upgrade-card';
-      card.setAttribute('data-training', def.id);
-      card.disabled = maxed || !affordable;
-      card.innerHTML = '<span class="name">' + escapeHtml(def.name) + '</span><span class="desc">' + escapeHtml(def.desc) + '</span><div class="row"><span class="count">' + (maxed ? '✓ Acheté' : '') + '</span><span class="price' + (affordable ? '' : ' too-expensive') + '">' + (maxed ? '—' : formatNumber(price) + ' crédits') + '</span></div>';
-      if (!maxed) card.addEventListener('click', () => buyTraining(def.id));
-      container.appendChild(card);
+      const row = document.createElement('div');
+      row.className = 'compact-row';
+      row.setAttribute('data-training', def.id);
+      row.innerHTML =
+        '<div class="compact-row-head" role="button" tabindex="0" aria-expanded="false">' +
+        '<span class="compact-row-name">' + escapeHtml(def.name) + '</span>' +
+        '<span class="compact-row-count">' + (maxed ? '✓ Acheté' : '') + '</span>' +
+        '<span class="compact-row-price' + (affordable ? '' : ' too-expensive') + '">' + (maxed ? '—' : formatNumber(price)) + '</span>' +
+        (maxed ? '' : '<button type="button" class="compact-row-buy">Acheter</button>') +
+        '<span class="compact-row-toggle" aria-hidden="true">▼</span>' +
+        '</div>' +
+        '<div class="compact-row-details">' +
+        '<span class="compact-row-desc">' + escapeHtml(def.desc) + '</span>' +
+        '</div>';
+      container.appendChild(row);
+      const head = row.querySelector('.compact-row-head');
+      head.addEventListener('click', function (e) {
+        if (e.target.closest('.compact-row-buy')) return;
+        row.classList.toggle('expanded');
+        head.setAttribute('aria-expanded', row.classList.contains('expanded'));
+      });
+      head.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); row.classList.toggle('expanded'); head.setAttribute('aria-expanded', row.classList.contains('expanded')); }
+      });
+      const buyBtn = row.querySelector('.compact-row-buy');
+      if (buyBtn) buyBtn.addEventListener('click', function (e) { e.stopPropagation(); buyTraining(def.id); });
     });
   }
 
@@ -1454,7 +1570,7 @@
       if (!container) return;
       const attr = type === 'upgrade' ? 'data-upgrade' : type === 'office' ? 'data-office' : type === 'branding' ? 'data-branding' : type === 'manager' ? 'data-manager' : type === 'intl' ? 'data-intl' : type === 'training' ? 'data-training' : null;
       if (!attr) return;
-      container.querySelectorAll('.upgrade-card[' + attr + ']').forEach((card) => {
+      container.querySelectorAll('.upgrade-card[' + attr + '], .compact-row[' + attr + ']').forEach((card) => {
         const cardId = attr ? card.getAttribute(attr) : null;
         if (!cardId) return;
         const def = getDef(cardId);
@@ -1464,9 +1580,21 @@
         const price = maxed ? 0 : getPrice(def, quantity);
         const affordable = maxed || canAfford(price);
         const levelOk = levelOkCheck(def);
-        card.disabled = !levelOk || (!maxed && !affordable);
-        const priceEl = card.querySelector('.price');
-        if (priceEl) priceEl.classList.toggle('too-expensive', !affordable && !maxed);
+        if (card.classList.contains('compact-row')) {
+          const priceEl = card.querySelector('.compact-row-price');
+          const countEl = card.querySelector('.compact-row-count');
+          const buyBtn = card.querySelector('.compact-row-buy');
+          if (priceEl) {
+            priceEl.textContent = maxed ? '—' : formatNumber(price);
+            priceEl.classList.toggle('too-expensive', !affordable && !maxed);
+          }
+          if (countEl) countEl.textContent = maxed ? (attr === 'data-manager' ? '✓ Max' : '✓ Acheté') : (attr === 'data-manager' ? quantity + '/' + (def.maxQty || '∞') : '');
+          if (buyBtn) buyBtn.disabled = !levelOk || (!maxed && !affordable);
+        } else {
+          card.disabled = !levelOk || (!maxed && !affordable);
+          const priceEl = card.querySelector('.price');
+          if (priceEl) priceEl.classList.toggle('too-expensive', !affordable && !maxed);
+        }
       });
     });
   }
@@ -1525,6 +1653,8 @@
   }
 
   function renderAll() {
+    var headerName = document.getElementById('header-agency-name');
+    if (headerName) headerName.textContent = (state.agencyName && state.agencyName.trim()) ? state.agencyName.trim() : 'DevIdle Agency';
     renderCredits();
     renderLevel();
     renderClickValue();
@@ -1557,7 +1687,10 @@
     addXP(prod * dt * XP_PER_CREDIT);
 
     if (state.activeEvent && state.eventEndsAt && Date.now() >= state.eventEndsAt) endEvent();
-    if (state.agencyEventChoice && state.agencyEventEndsAt <= Date.now()) state.agencyEventChoice = null;
+    if (state.agencyEventChoice && state.agencyEventEndsAt <= Date.now()) {
+      state.agencyEventChoice = null;
+      state.agencyEventEndsAt = 0;
+    }
     const nowMs = Date.now();
     (state.employees || []).forEach((emp) => {
       if (emp.hasError && nowMs >= emp.errorUntil) {
@@ -1599,8 +1732,33 @@
     renderCredits();
   }
 
-  function onCodeClick() {
-    addCredits(state.clickPower);
+  function showClickProfitAnimation(clientX, clientY) {
+    var amount = Math.max(1, Math.floor(getClickPower()) || 1);
+    var el = document.createElement('div');
+    el.className = 'click-profit-popup';
+    el.textContent = '+' + formatNumber(amount);
+    el.style.left = clientX + 'px';
+    el.style.top = clientY + 'px';
+    document.body.appendChild(el);
+    requestAnimationFrame(function () {
+      el.classList.add('click-profit-popup-visible');
+    });
+    setTimeout(function () {
+      el.remove();
+    }, 700);
+  }
+
+  function onCodeClick(e) {
+    addCredits();
+    if (e && typeof e.clientX === 'number' && typeof e.clientY === 'number') {
+      showClickProfitAnimation(e.clientX, e.clientY);
+    } else {
+      var btn = document.getElementById('btn-code') || document.getElementById('btn-code-nav');
+      if (btn) {
+        var r = btn.getBoundingClientRect();
+        showClickProfitAnimation(r.left + r.width / 2, r.top + r.height / 2);
+      }
+    }
   }
 
   function initTabs() {
@@ -1614,8 +1772,7 @@
     showTab('accueil');
   }
 
-  function init() {
-    load();
+  function startGameLogic() {
     lastTick = performance.now();
     document.body.setAttribute('data-chapter', state.chapter);
     if (!state.nextEventAt || state.nextEventAt < Date.now()) scheduleNextEvent();
@@ -1651,6 +1808,7 @@
     document.getElementById('levelup-validate-btn')?.addEventListener('click', function () {
       if (levelUpSelectedId) {
         applyLevelBonus(levelUpSelectedId);
+        levelUpSelectedId = null;
       }
     });
     document.getElementById('chapter-complete-modal-close')?.addEventListener('click', function () {
@@ -1671,10 +1829,22 @@
 
     document.getElementById('btn-deconnexion')?.addEventListener('click', function () {
       try {
-        localStorage.removeItem('agence-dev-idle-save-v4');
+        localStorage.removeItem(SAVE_KEY);
       } catch (e) {}
       window.location.reload();
     });
+
+    var agencyNameInput = document.getElementById('settings-agency-name');
+    if (agencyNameInput) {
+      agencyNameInput.value = (state.agencyName && state.agencyName.trim()) ? state.agencyName.trim() : 'Mon Agence';
+      agencyNameInput.addEventListener('change', function () {
+        var val = (this.value && this.value.trim()) ? this.value.trim().slice(0, 40) : 'Mon Agence';
+        state.agencyName = val;
+        this.value = val;
+        save();
+        renderAll();
+      });
+    }
 
     const btnCode = document.getElementById('btn-code');
     if (btnCode) btnCode.addEventListener('click', onCodeClick);
@@ -1692,20 +1862,76 @@
     window.addEventListener('beforeunload', save);
   }
 
-  function sanitizeEmployeesMentorship() {
-    (state.employees || []).forEach((emp) => {
-      if (emp.mentorId === emp.id) {
-        emp.mentorId = null;
+  function init() {
+    try {
+      load();
+    } catch (e) {
+      console.warn('Load failed', e);
+    }
+    var hasSave = !!localStorage.getItem(SAVE_KEY);
+    var agencyScreen = document.getElementById('agency-name-screen');
+    var gameScreen = document.getElementById('game-screen');
+
+    function showGameAndStart() {
+      if (gameScreen) {
+        gameScreen.hidden = false;
+        gameScreen.classList.add('active');
       }
-      if (Array.isArray(emp.menteesIds)) {
-        emp.menteesIds = emp.menteesIds.filter((id) => id !== emp.id);
+      if (agencyScreen) {
+        agencyScreen.hidden = true;
+        agencyScreen.classList.remove('active');
       }
+      startGameLogic();
+    }
+
+    if (agencyScreen && gameScreen && !hasSave) {
+      gameScreen.hidden = true;
+      gameScreen.classList.remove('active');
+      agencyScreen.hidden = false;
+      agencyScreen.classList.add('active');
+      var form = document.getElementById('agency-name-form');
+      if (form) {
+        form.addEventListener('submit', function (e) {
+          e.preventDefault();
+          var input = document.getElementById('agency-name-input');
+          state.agencyName = (input && input.value && input.value.trim()) ? input.value.trim().slice(0, 40) : 'Mon Agence';
+          try { save(); } catch (err) { console.warn(err); }
+          showGameAndStart();
+        });
+      } else {
+        showGameAndStart();
+      }
+      (state.employees || []).forEach(function (emp) {
+        if (emp.mentorId === emp.id) emp.mentorId = null;
+        if (Array.isArray(emp.menteesIds)) emp.menteesIds = emp.menteesIds.filter(function (id) { return id !== emp.id; });
+      });
+      return;
+    }
+
+    showGameAndStart();
+    (state.employees || []).forEach(function (emp) {
+      if (emp.mentorId === emp.id) emp.mentorId = null;
+      if (Array.isArray(emp.menteesIds)) emp.menteesIds = emp.menteesIds.filter(function (id) { return id !== emp.id; });
     });
   }
 
+  function runInit() {
+    try {
+      init();
+    } catch (e) {
+      console.error('Init error', e);
+      var gameScreen = document.getElementById('game-screen');
+      if (gameScreen) {
+        gameScreen.hidden = false;
+        gameScreen.classList.add('active');
+      }
+      try { startGameLogic(); } catch (e2) { console.error('startGameLogic failed', e2); }
+    }
+  }
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
+    document.addEventListener('DOMContentLoaded', runInit);
   } else {
-    init();
+    setTimeout(runInit, 0);
   }
 })();

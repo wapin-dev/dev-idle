@@ -40,11 +40,24 @@
       </div>
     </section>
 
+    <!-- Écran : Choisir le nom de l'agence (première connexion / nouvelle partie) -->
+    <section id="agency-name-screen" class="screen agency-name-screen" hidden>
+      <div class="agency-name-card">
+        <h1>DevIdle Agency</h1>
+        <p class="agency-name-desc">Choisis le nom de ton agence pour commencer ta partie.</p>
+        <form id="agency-name-form" class="agency-name-form">
+          <label for="agency-name-input">Nom de l'agence</label>
+          <input type="text" id="agency-name-input" name="agencyName" placeholder="Mon Agence" maxlength="40" autocomplete="organization">
+          <button type="submit" id="btn-start-game" class="btn btn-primary">Commencer ma partie</button>
+        </form>
+      </div>
+    </section>
+
     <!-- Écran Jeu complet – design TapStorm (sombre violet, onglets séparés) -->
     <section id="game-screen" class="screen active app tapstorm-screen">
       <header class="header idle-header">
         <div class="header-row header-row-main">
-          <span class="header-title">DevIdle Agency</span>
+          <span id="header-agency-name" class="header-title">DevIdle Agency</span>
           <div class="header-currency">
             <span class="header-coin" aria-hidden="true">🪙</span>
             <span id="credits" class="header-credits">0</span>
@@ -65,6 +78,13 @@
         <!-- Onglet Accueil : clicker + objectifs -->
         <section class="tab-panel tapstorm-panel" id="tab-accueil">
           <section class="clicker-section">
+            <div class="accueil-code-anim" aria-hidden="true">
+              <span class="accueil-code-line">
+                <span class="accueil-bracket">{</span><span class="accueil-word"> code </span><span class="accueil-bracket">}</span>
+              </span>
+              <span class="accueil-cursor"></span>
+              <span class="accueil-tag">// DevIdle Agency</span>
+            </div>
             <button type="button" id="btn-code" class="btn-code tapstorm-cta" aria-label="Coder une feature">
               <span class="btn-code-text">Coder une feature</span>
               <span id="click-value" class="click-value">+1</span>
@@ -141,6 +161,12 @@
         <!-- Onglet Réglages : Paramètres + Déconnexion -->
         <section class="tab-panel tapstorm-panel tapstorm-panel-settings" id="tab-reglages" hidden>
           <h2 class="panel-title">Paramètres</h2>
+          <div class="settings-block tapstorm-card">
+            <div class="settings-row settings-row-input">
+              <label for="settings-agency-name" class="settings-label">Nom de l'agence</label>
+              <input type="text" id="settings-agency-name" class="settings-input" placeholder="Mon Agence" maxlength="40" autocomplete="organization">
+            </div>
+          </div>
           <div class="settings-block tapstorm-card">
             <div class="settings-row">
               <span class="settings-label">Sons</span>

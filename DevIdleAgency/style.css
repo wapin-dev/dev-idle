@@ -107,6 +107,81 @@ body {
   gap: 10px;
 }
 
+/* ---- Écran choix nom d'agence (première connexion) ---- */
+.agency-name-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 80vh;
+}
+
+.agency-name-screen.active {
+  display: flex;
+}
+
+.agency-name-card {
+  width: 100%;
+  background: var(--bg-card);
+  padding: 24px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.agency-name-card h1 {
+  margin: 0 0 4px;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.agency-name-desc {
+  margin: 0 0 20px;
+  color: var(--text-dim);
+  font-size: 0.95rem;
+}
+
+.agency-name-form label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.agency-name-form input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  font-size: 1rem;
+  font-family: inherit;
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+  margin-bottom: 16px;
+}
+
+.agency-name-form input::placeholder {
+  color: var(--text-dim);
+}
+
+.agency-name-form input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.3);
+}
+
+.agency-name-form .btn {
+  margin-top: 8px;
+}
+
+body.tapstorm-theme .agency-name-card {
+  background: rgba(45, 27, 105, 0.6);
+  border: 1px solid rgba(139, 92, 246, 0.35);
+}
+
+body.tapstorm-theme .agency-name-form .btn-primary {
+  background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
+  color: #fff;
+}
+
 /* ---- Boutons ---- */
 .btn {
   width: 100%;
@@ -657,11 +732,15 @@ body.game-active #game-screen .upgrade-card .desc,
 body.game-active #game-screen .contract-card .desc { font-size: 0.8rem; color: var(--text-dim); }
 body.game-active #game-screen .upgrade-card .price,
 body.game-active #game-screen .contract-card .price { font-weight: 700; color: #ea580c; }
-body.game-active #game-screen .employees-list { display: flex; flex-direction: column; gap: 10px; }
+body.game-active #game-screen .employees-list { display: flex; flex-direction: column; gap: 6px; }
 body.game-active #game-screen .employee-row {
   background: rgba(255,255,255,0.12);
   border-radius: var(--radius-sm);
   border-left: 4px solid #00d9a5;
+}
+body.game-active #game-screen .employee-row-head:focus-visible {
+  outline: 2px solid #00d9a5;
+  outline-offset: 2px;
 }
 body.game-active #game-screen .reputation-shop,
 body.game-active #game-screen .best-run,
@@ -960,6 +1039,28 @@ body.tapstorm-theme #game-screen .tapstorm-cta:hover {
 body.tapstorm-theme #game-screen .clicker-section {
   margin-bottom: 8px;
 }
+body.tapstorm-theme #game-screen .accueil-code-anim {
+  background: rgba(45, 27, 105, 0.5);
+  border-color: rgba(139, 92, 246, 0.5);
+  color: #f1f1f4;
+}
+body.tapstorm-theme #game-screen .accueil-bracket {
+  color: #c4b5fd;
+}
+body.tapstorm-theme #game-screen .accueil-word {
+  color: #e9d5ff;
+}
+body.tapstorm-theme #game-screen .accueil-cursor {
+  background: #a78bfa;
+  box-shadow: 0 0 12px rgba(167, 139, 250, 0.9);
+}
+body.tapstorm-theme #game-screen .accueil-tag {
+  color: rgba(255, 255, 255, 0.65);
+}
+body.tapstorm-theme .click-profit-popup {
+  color: #4ade80;
+  text-shadow: 0 0 10px rgba(74, 222, 128, 0.6), 0 1px 2px rgba(0, 0, 0, 0.4);
+}
 body.tapstorm-theme #game-screen .click-value {
   font-size: 0.95rem;
   opacity: 0.95;
@@ -985,6 +1086,30 @@ body.tapstorm-theme #game-screen .tapstorm-btn-secondary {
 }
 body.tapstorm-theme #game-screen .tapstorm-btn-secondary:hover {
   background: rgba(139, 92, 246, 0.4);
+}
+body.tapstorm-theme #game-screen #recruitment-refresh-btn.too-expensive,
+body.tapstorm-theme #game-screen #recruitment-refresh-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: rgba(139, 92, 246, 0.15);
+}
+/* Candidats (vue compacte) */
+body.tapstorm-theme #game-screen .candidate-row {
+  background: rgba(45, 27, 105, 0.5);
+  border-left-color: #8b5cf6;
+}
+body.tapstorm-theme #game-screen .candidate-row-details {
+  background: rgba(30, 20, 60, 0.5);
+}
+body.tapstorm-theme #game-screen .candidate-row-head:focus-visible {
+  outline: 2px solid #8b5cf6;
+  outline-offset: 2px;
+}
+body.tapstorm-theme #game-screen .candidate-sign,
+body.tapstorm-theme #game-screen .candidate-sign-detail {
+  background: #8b5cf6;
+  color: #fff;
+  border-radius: 8px;
 }
 /* Cartes TapStorm (fond gris foncé, bordure violette) */
 body.tapstorm-theme #game-screen .tapstorm-cards {
@@ -1069,14 +1194,36 @@ body.tapstorm-theme #game-screen #upgrades-list .promote-btn {
   color: #e9d5ff;
   border-radius: 12px;
 }
-/* Équipe / employés */
+/* Équipe / employés (vue compacte dépliable) */
 body.tapstorm-theme #game-screen .employee-row {
   background: rgba(45, 27, 105, 0.5);
   border-radius: 12px;
   border-left: 4px solid #8b5cf6;
-  padding: 12px 14px;
-  margin-bottom: 8px;
   color: #f1f1f4;
+}
+body.tapstorm-theme #game-screen .employee-row-details {
+  background: rgba(30, 20, 60, 0.5);
+}
+body.tapstorm-theme #game-screen .employee-row-head:focus-visible {
+  outline: 2px solid #8b5cf6;
+  outline-offset: 2px;
+}
+/* Cadres / Formations (vue compacte) */
+body.tapstorm-theme #game-screen .compact-row {
+  background: rgba(45, 27, 105, 0.5);
+  border-left-color: #8b5cf6;
+}
+body.tapstorm-theme #game-screen .compact-row-details {
+  background: rgba(30, 20, 60, 0.5);
+}
+body.tapstorm-theme #game-screen .compact-row-head:focus-visible {
+  outline: 2px solid #8b5cf6;
+  outline-offset: 2px;
+}
+body.tapstorm-theme #game-screen .compact-row-buy {
+  background: #8b5cf6;
+  color: #fff;
+  border-radius: 8px;
 }
 /* Objectifs */
 body.tapstorm-theme #game-screen .quests-section {
@@ -1242,6 +1389,33 @@ body.tapstorm-theme #game-screen .settings-label {
   color: #f1f1f4;
   font-size: 0.95rem;
   font-weight: 500;
+}
+body.tapstorm-theme #game-screen .settings-row-input {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+body.tapstorm-theme #game-screen .settings-row-input .settings-label {
+  margin-bottom: 0;
+}
+body.tapstorm-theme #game-screen .settings-input {
+  width: 100%;
+  padding: 12px 14px;
+  font-size: 1rem;
+  font-family: inherit;
+  color: #f1f1f4;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(139, 92, 246, 0.4);
+  border-radius: 10px;
+  box-sizing: border-box;
+}
+body.tapstorm-theme #game-screen .settings-input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+body.tapstorm-theme #game-screen .settings-input:focus {
+  outline: none;
+  border-color: #8b5cf6;
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.25);
 }
 body.tapstorm-theme #game-screen .settings-toggle {
   position: relative;
