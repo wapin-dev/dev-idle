@@ -155,85 +155,125 @@ html {
   margin-bottom: 20px;
 }
 
-/* Animation "code" sur l'accueil – bien visible et expressive */
+/* Animation accueil – bloc "agence" style IDE, impactant */
 .accueil-code-anim {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 8px 12px;
-  margin-bottom: 16px;
-  padding: 14px 20px;
-  background: rgba(0, 0, 0, 0.25);
-  border-radius: 12px;
-  border: 1px solid rgba(139, 92, 246, 0.35);
+  margin-bottom: 18px;
   font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, monospace;
-  font-size: 1.15rem;
+  animation: accueil-block-enter 0.6s ease-out;
+}
+
+.accueil-code-window {
+  border-radius: 12px;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(30, 27, 45, 0.98) 0%, rgba(15, 12, 28, 0.98) 100%);
+  border: 1px solid rgba(139, 92, 246, 0.5);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3), 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 40px rgba(139, 92, 246, 0.2);
+  animation: accueil-window-glow 2.5s ease-in-out infinite;
+}
+
+.accueil-code-title {
+  padding: 8px 14px;
+  font-size: 0.8rem;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.95);
-  letter-spacing: 0.04em;
-  box-shadow: 0 0 20px rgba(139, 92, 246, 0.15);
-  animation: accueil-container-glow 3s ease-in-out infinite;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(0, 0, 0, 0.35);
+  border-bottom: 1px solid rgba(139, 92, 246, 0.3);
+  letter-spacing: 0.05em;
 }
 
-.accueil-code-line {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
+.accueil-code-body {
+  padding: 14px 16px 16px;
 }
 
-.accueil-bracket {
-  color: #c4b5fd;
-  font-size: 1.35em;
+.accueil-code-row {
+  font-size: 1rem;
+  line-height: 1.6;
+  letter-spacing: 0.02em;
+}
+
+.accueil-code-row + .accueil-code-row {
+  margin-top: 6px;
+}
+
+.accueil-comment {
+  color: #6ee7b7;
+  font-style: italic;
+  text-shadow: 0 0 12px rgba(110, 231, 183, 0.4);
+  animation: accueil-comment-pulse 3s ease-in-out infinite;
+}
+
+.accueil-keyword {
+  color: #c084fc;
   font-weight: 700;
-  text-shadow: 0 0 12px rgba(196, 181, 253, 0.8);
-  animation: accueil-bracket-pulse 1.8s ease-in-out infinite;
+  text-shadow: 0 0 10px rgba(192, 132, 252, 0.5);
 }
 
-.accueil-word {
-  color: #e9d5ff;
-  text-shadow: 0 0 8px rgba(233, 213, 255, 0.5);
+.accueil-var {
+  color: #fbbf24;
+  font-weight: 600;
 }
 
-.accueil-cursor {
+.accueil-operator {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.accueil-dot {
+  color: #a78bfa;
+}
+
+.accueil-method {
+  color: #67e8f9;
+  font-weight: 600;
+  text-shadow: 0 0 8px rgba(103, 232, 249, 0.4);
+}
+
+.accueil-code-row .accueil-bracket {
+  color: #f472b6;
+  font-weight: 700;
+}
+
+.accueil-code-row .accueil-cursor {
   display: inline-block;
-  width: 6px;
-  height: 1.1em;
+  width: 8px;
+  height: 1.15em;
+  margin-left: 2px;
   background: #a78bfa;
   vertical-align: text-bottom;
-  border-radius: 1px;
-  box-shadow: 0 0 10px rgba(167, 139, 250, 0.8);
-  animation: accueil-cursor-blink 0.9s step-end infinite;
+  border-radius: 2px;
+  box-shadow: 0 0 14px rgba(167, 139, 250, 0.9);
+  animation: accueil-cursor-blink 0.8s step-end infinite;
 }
 
-.accueil-tag {
-  width: 100%;
-  text-align: center;
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.6);
-  letter-spacing: 0.08em;
-  animation: accueil-tag-fade 4s ease-in-out infinite;
+@keyframes accueil-block-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes accueil-window-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3), 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 40px rgba(139, 92, 246, 0.2);
+    border-color: rgba(139, 92, 246, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3), 0 8px 36px rgba(0, 0, 0, 0.45), 0 0 50px rgba(139, 92, 246, 0.35);
+    border-color: rgba(139, 92, 246, 0.7);
+  }
+}
+
+@keyframes accueil-comment-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.85; }
 }
 
 @keyframes accueil-cursor-blink {
   0%, 50% { opacity: 1; }
   51%, 100% { opacity: 0; }
-}
-
-@keyframes accueil-bracket-pulse {
-  0%, 100% { opacity: 1; transform: scale(1); text-shadow: 0 0 12px rgba(196, 181, 253, 0.8); }
-  50% { opacity: 0.85; transform: scale(1.08); text-shadow: 0 0 18px rgba(196, 181, 253, 1); }
-}
-
-@keyframes accueil-container-glow {
-  0%, 100% { box-shadow: 0 0 20px rgba(139, 92, 246, 0.15); border-color: rgba(139, 92, 246, 0.35); }
-  50% { box-shadow: 0 0 28px rgba(139, 92, 246, 0.3); border-color: rgba(139, 92, 246, 0.55); }
-}
-
-@keyframes accueil-tag-fade {
-  0%, 100% { opacity: 0.5; }
-  50% { opacity: 1; }
 }
 
 /* Popup "+X" au clic profit */
@@ -339,6 +379,8 @@ html {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  max-height: 320px;
+  overflow-y: auto;
 }
 
 .quest-item {
@@ -360,6 +402,42 @@ html {
 .quest-item .quest-progress {
   font-size: 0.8rem;
   color: var(--text-muted);
+}
+
+.quests-hint {
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+.quests-empty {
+  margin: 0;
+  padding: 10px 12px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+.btn-show-all-quests {
+  margin-top: 12px;
+  width: 100%;
+}
+.quests-list-full {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.settings-completed-quests-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.settings-completed-quest-item {
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-alt);
+  font-size: 0.9rem;
+  border-left: 3px solid var(--accent);
+}
+.settings-all-quests-list {
+  margin-top: 8px;
 }
 
 /* ----- Shop tabs ----- */
@@ -422,15 +500,54 @@ html {
 
 .promote-btn:hover { background: rgba(0, 217, 165, 0.15); }
 
-.contrat-card {
-  padding: 14px;
-  border-radius: var(--radius);
-  background: var(--surface);
+.game-icon {
+  flex-shrink: 0;
+  object-fit: contain;
+  vertical-align: middle;
+  min-width: 20px;
+  min-height: 20px;
+  display: inline-block;
+  /* Meilleur contraste sur fond sombre */
+  opacity: 1;
+  filter: brightness(1.05) contrast(1.08);
+}
+/* SVG inline ou img : forcer une teinte lisible si besoin */
+body.game-active .game-icon[src*="placeholder"] {
+  filter: brightness(1.15) contrast(1.1);
+}
+
+.header-currency {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.header-currency .header-coin-icon {
+  flex-shrink: 0;
+}
+.tab-btn .nav-icon.game-icon,
+.nav-click-btn .nav-click-icon {
+  display: block;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+#recruitment-refresh-btn,
+#btn-deconnexion {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   gap: 8px;
 }
 
+.contrat-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.contrat-card > .game-icon { align-self: flex-start; }
 .contrat-card .name { font-weight: 700; }
 .contrat-card .desc { font-size: 0.85rem; color: var(--text-muted); }
 .contrat-start, .contrat-claim {
@@ -901,6 +1018,10 @@ html {
   color: var(--text);
 }
 
+.error-modal-icon {
+  display: block;
+  margin: 0 auto 10px;
+}
 .error-modal-name {
   font-weight: 600;
   color: var(--danger);
@@ -999,7 +1120,10 @@ html {
 }
 
 .btn-prestige {
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   width: 100%;
   padding: 14px 20px;
   border: 2px solid var(--reputation);

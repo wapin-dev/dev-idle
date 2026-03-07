@@ -59,7 +59,7 @@
         <div class="header-row header-row-main">
           <span id="header-agency-name" class="header-title">DevIdle Agency</span>
           <div class="header-currency">
-            <span class="header-coin" aria-hidden="true">🪙</span>
+            <img id="header-coin-icon" class="game-icon header-coin-icon" src="/assets/icons/placeholder.svg" alt="" width="22" height="22" data-fallback="/assets/icons/placeholder.svg">
             <span id="credits" class="header-credits">0</span>
           </div>
         </div>
@@ -79,11 +79,17 @@
         <section class="tab-panel tapstorm-panel" id="tab-accueil">
           <section class="clicker-section">
             <div class="accueil-code-anim" aria-hidden="true">
-              <span class="accueil-code-line">
-                <span class="accueil-bracket">{</span><span class="accueil-word"> code </span><span class="accueil-bracket">}</span>
-              </span>
-              <span class="accueil-cursor"></span>
-              <span class="accueil-tag">// DevIdle Agency</span>
+              <div class="accueil-code-window">
+                <div class="accueil-code-title">agence.js</div>
+                <div class="accueil-code-body">
+                  <div class="accueil-code-row">
+                    <span class="accueil-comment">// On code. Tu délégues. Tu scales.</span>
+                  </div>
+                  <div class="accueil-code-row">
+                    <span class="accueil-keyword">const</span> <span class="accueil-var">livraison</span> <span class="accueil-operator">=</span> <span class="accueil-var">agence</span><span class="accueil-dot">.</span><span class="accueil-method">deploy</span><span class="accueil-bracket">()</span><span class="accueil-cursor"></span>
+                  </div>
+                </div>
+              </div>
             </div>
             <button type="button" id="btn-code" class="btn-code tapstorm-cta" aria-label="Coder une feature">
               <span class="btn-code-text">Coder une feature</span>
@@ -97,7 +103,9 @@
           </section>
           <section class="quests-section" id="quests-section">
             <h2 class="panel-title">Objectifs</h2>
+            <p class="quests-hint">Prochains objectifs à atteindre</p>
             <div id="quests-list" class="quests-list"></div>
+            <button type="button" id="btn-show-all-quests" class="tapstorm-btn tapstorm-btn-secondary btn-show-all-quests">Voir tous les objectifs</button>
           </section>
         </section>
 
@@ -106,7 +114,10 @@
           <h2 class="panel-title">Contrats disponibles</h2>
           <p class="tab-desc">Signe un contrat pour recruter. Chaque profil a sa prod et son taux d'erreur.</p>
           <div class="recruitment-actions">
-            <button type="button" id="recruitment-refresh-btn" class="tapstorm-btn tapstorm-btn-secondary">Nouveaux candidats</button>
+            <button type="button" id="recruitment-refresh-btn" class="tapstorm-btn tapstorm-btn-secondary">
+              <img class="game-icon recruitment-refresh-icon" data-icon="refresh" src="/assets/icons/placeholder.svg" alt="" width="20" height="20" data-fallback="/assets/icons/placeholder.svg">
+              <span id="recruitment-refresh-text">Nouveaux candidats</span>
+            </button>
           </div>
           <p id="recruitment-cap" class="recruitment-cap"></p>
           <div id="recruitment-contracts-list" class="upgrades-list tapstorm-cards"></div>
@@ -152,6 +163,7 @@
           </section>
           <section class="prestige-section tapstorm-card" id="prestige-section">
             <button type="button" id="btn-prestige" class="tapstorm-btn tapstorm-btn-primary btn-prestige" disabled>
+              <img class="game-icon prestige-btn-icon" src="/assets/icons/placeholder.svg" alt="" width="22" height="22" data-fallback="/assets/icons/placeholder.svg">
               Rebranding complet
             </button>
             <p class="prestige-desc" id="prestige-desc">Atteins 100K crédits pour débloquer</p>
@@ -190,9 +202,20 @@
               </label>
             </div>
           </div>
+          <h2 class="panel-title panel-title-spaced">Tous les objectifs</h2>
+          <div class="settings-block tapstorm-card">
+            <p class="settings-hint">Liste complète avec statut (fait ou en cours).</p>
+            <div id="settings-all-quests-list" class="quests-list quests-list-full settings-all-quests-list"></div>
+          </div>
+          <h2 class="panel-title panel-title-spaced">Objectifs accomplis</h2>
+          <div class="settings-block tapstorm-card" id="settings-completed-quests-block">
+            <div id="settings-completed-quests-list" class="settings-completed-quests-list"></div>
+            <p class="settings-hint" id="settings-completed-quests-empty">Aucun objectif accompli pour l’instant.</p>
+          </div>
           <h2 class="panel-title panel-title-spaced">Compte</h2>
           <div class="settings-block tapstorm-card">
             <button type="button" id="btn-deconnexion" class="tapstorm-btn tapstorm-btn-danger">
+              <img class="game-icon btn-deconnexion-icon" data-icon="logout" src="/assets/icons/placeholder.svg" alt="" width="20" height="20" data-fallback="/assets/icons/placeholder.svg">
               Déconnexion
             </button>
             <p class="settings-hint">Réinitialise la partie locale et recharge l’app.</p>
@@ -201,13 +224,13 @@
       </main>
 
       <nav class="shop-tabs tapstorm-nav">
-        <button type="button" class="tab-btn active" data-tab="accueil"><span class="nav-icon">🏠</span><span class="nav-label">Accueil</span></button>
-        <button type="button" class="tab-btn" data-tab="candidats"><span class="nav-icon">👤</span><span class="nav-label">Candidats</span></button>
-        <button type="button" class="tab-btn" data-tab="equipe"><span class="nav-icon">👥</span><span class="nav-label">Équipe</span></button>
-        <button type="button" id="btn-code-nav" class="nav-click-btn" aria-label="Coder une feature">⚡</button>
-        <button type="button" class="tab-btn" data-tab="boutique"><span class="nav-icon">🛒</span><span class="nav-label">Boutique</span></button>
-        <button type="button" class="tab-btn" data-tab="plus"><span class="nav-icon">📋</span><span class="nav-label">Plus</span></button>
-        <button type="button" class="tab-btn" data-tab="reglages"><span class="nav-icon">⚙️</span><span class="nav-label">Réglages</span></button>
+        <button type="button" class="tab-btn active" data-tab="accueil"><img class="nav-icon game-icon" data-icon="home" src="/assets/icons/placeholder.svg" alt="" width="24" height="24" data-fallback="/assets/icons/placeholder.svg"><span class="nav-label">Accueil</span></button>
+        <button type="button" class="tab-btn" data-tab="candidats"><img class="nav-icon game-icon" data-icon="user" src="/assets/icons/placeholder.svg" alt="" width="24" height="24" data-fallback="/assets/icons/placeholder.svg"><span class="nav-label">Candidats</span></button>
+        <button type="button" class="tab-btn" data-tab="equipe"><img class="nav-icon game-icon" data-icon="user-group" src="/assets/icons/placeholder.svg" alt="" width="24" height="24" data-fallback="/assets/icons/placeholder.svg"><span class="nav-label">Équipe</span></button>
+        <button type="button" id="btn-code-nav" class="nav-click-btn" aria-label="Coder une feature"><img class="nav-click-icon game-icon" data-icon="flash" src="/assets/icons/placeholder.svg" alt="" width="28" height="28" data-fallback="/assets/icons/placeholder.svg"></button>
+        <button type="button" class="tab-btn" data-tab="boutique"><img class="nav-icon game-icon" data-icon="shopping-cart" src="/assets/icons/placeholder.svg" alt="" width="24" height="24" data-fallback="/assets/icons/placeholder.svg"><span class="nav-label">Boutique</span></button>
+        <button type="button" class="tab-btn" data-tab="plus"><img class="nav-icon game-icon" data-icon="list" src="/assets/icons/placeholder.svg" alt="" width="24" height="24" data-fallback="/assets/icons/placeholder.svg"><span class="nav-label">Plus</span></button>
+        <button type="button" class="tab-btn" data-tab="reglages"><img class="nav-icon game-icon" data-icon="settings" src="/assets/icons/placeholder.svg" alt="" width="24" height="24" data-fallback="/assets/icons/placeholder.svg"><span class="nav-label">Réglages</span></button>
       </nav>
 
       <footer class="footer tapstorm-footer">
@@ -237,9 +260,18 @@
           <div id="agency-event-options" class="levelup-choices"></div>
         </div>
       </div>
+      <div class="modal-overlay" id="all-quests-modal" hidden>
+        <div class="modal modal-popup">
+          <button type="button" class="modal-close" id="all-quests-modal-close" aria-label="Fermer">&times;</button>
+          <h3 class="modal-title">Tous les objectifs</h3>
+          <p class="modal-subtitle">Liste complète des objectifs (en cours et accomplis)</p>
+          <div id="all-quests-modal-list" class="quests-list quests-list-full"></div>
+        </div>
+      </div>
       <div class="modal-overlay" id="error-modal" hidden>
         <div class="modal modal-popup">
           <button type="button" class="modal-close" id="error-modal-close" aria-label="Fermer">&times;</button>
+          <img id="error-modal-icon" class="game-icon error-modal-icon" src="/assets/icons/placeholder.svg" alt="" width="48" height="48">
           <h3 class="modal-title">Erreur en prod</h3>
           <p id="error-modal-message" class="error-message"></p>
           <p id="error-modal-name" class="error-modal-name"></p>
@@ -253,7 +285,6 @@
     </section>
   </div>
 
-  <script src="/game.js"></script>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

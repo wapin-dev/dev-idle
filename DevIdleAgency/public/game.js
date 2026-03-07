@@ -23,6 +23,14 @@
   const GLOBAL_PRODUCTION_SCALE = 0.15;
 
   const EMPLOYEE_TYPE_LABELS = { stagiaire: 'Stagiaire', junior: 'Dev junior', senior: 'Dev senior' };
+  const EMPLOYEE_TYPE_ICONS = { stagiaire: 'student', junior: 'developer', senior: 'conference-call' };
+  const FALLBACK_ICON = '/assets/icons/placeholder.svg';
+  function getIconImg(name, size) {
+    size = size || 28;
+    var url = (typeof window.getIconUrl === 'function') ? window.getIconUrl(name, size) : FALLBACK_ICON;
+    var fallback = (typeof window.getFallbackIconPath === 'function') ? window.getFallbackIconPath() : FALLBACK_ICON;
+    return '<img class="game-icon" src="' + url + '" data-fallback="' + fallback + '" alt="" aria-hidden="true" width="' + size + '" height="' + size + '">';
+  }
   const EMPLOYEE_TYPE_PROD_RANGES = {
     stagiaire: { min: 0.2, max: 0.5 },
     junior: { min: 0.6, max: 1.2 },
@@ -160,13 +168,51 @@
   ];
 
   const QUEST_DEFS = [
-    { id: 'credits1k', name: 'Premier millier', target: () => state.credits >= 1000, reward: { xp: 50 } },
+    /* Crédits – paliers plus exigeants */
+    { id: 'credits5k', name: 'Premier pactole (5K crédits)', target: () => state.credits >= 5000, reward: { xp: 30 } },
+    { id: 'credits25k', name: 'En croissance (25K crédits)', target: () => state.credits >= 25000, reward: { xp: 80 } },
+    { id: 'credits100k', name: '100K au compteur', target: () => state.credits >= 1e5, reward: { xp: 150 } },
+    { id: 'credits500k', name: 'Demi-million', target: () => state.credits >= 5e5, reward: { xp: 300 } },
     { id: 'credits1M', name: 'Millionnaire', target: () => state.credits >= 1e6, reward: { xp: 500 } },
-    { id: 'stagiaires10', name: '10 stagiaires', target: () => (getUpgradeState('stagiaire')?.quantity || 0) + (state.employees || []).filter((e) => e.type === 'stagiaire').length >= 10, reward: { xp: 100 } },
-    { id: 'recruit5', name: '5 recrutements', target: () => (state.employees || []).length >= 5, reward: { xp: 80 } },
-    { id: 'bureaux3', name: '3 bureaux différents', target: () => getOwnedOfficesCount() >= 3, reward: { xp: 300 } },
-    { id: 'level5', name: 'Niveau 5', target: () => state.playerLevel >= 5, reward: { xp: 200 } },
+    { id: 'credits5M', name: '5 millions', target: () => state.credits >= 5e6, reward: { xp: 800 } },
+    { id: 'credits25M', name: '25 millions', target: () => state.credits >= 25e6, reward: { xp: 1200 } },
+    { id: 'credits100M', name: '100 millions', target: () => state.credits >= 1e8, reward: { xp: 2000 } },
+    { id: 'credits500M', name: 'Demi-milliard', target: () => state.credits >= 5e8, reward: { xp: 3500 } },
+    { id: 'credits1B', name: 'Milliardaire', target: () => state.credits >= 1e9, reward: { xp: 5000 } },
+    /* Niveau */
+    { id: 'level5', name: 'Niveau 5', target: () => state.playerLevel >= 5, reward: { xp: 100 } },
+    { id: 'level10', name: 'Niveau 10', target: () => state.playerLevel >= 10, reward: { xp: 200 } },
+    { id: 'level15', name: 'Niveau 15', target: () => state.playerLevel >= 15, reward: { xp: 350 } },
+    { id: 'level20', name: 'Niveau 20', target: () => state.playerLevel >= 20, reward: { xp: 500 } },
+    { id: 'level30', name: 'Niveau 30', target: () => state.playerLevel >= 30, reward: { xp: 800 } },
+    { id: 'level40', name: 'Niveau 40', target: () => state.playerLevel >= 40, reward: { xp: 1200 } },
+    { id: 'level50', name: 'Niveau 50', target: () => state.playerLevel >= 50, reward: { xp: 1800 } },
+    { id: 'level60', name: 'Niveau 60', target: () => state.playerLevel >= 60, reward: { xp: 2500 } },
+    /* Recrutement & équipe */
+    { id: 'recruit3', name: '3 employés recrutés', target: () => (state.employees || []).length >= 3, reward: { xp: 60 } },
+    { id: 'recruit8', name: '8 employés recrutés', target: () => (state.employees || []).length >= 8, reward: { xp: 200 } },
+    { id: 'recruit15', name: '15 employés recrutés', target: () => (state.employees || []).length >= 15, reward: { xp: 500 } },
+    { id: 'stagiaires5', name: '5 stagiaires (upgrades + recrus)', target: () => (getUpgradeState('stagiaire')?.quantity || 0) + (state.employees || []).filter((e) => e.type === 'stagiaire').length >= 5, reward: { xp: 80 } },
+    { id: 'stagiaires15', name: '15 stagiaires', target: () => (getUpgradeState('stagiaire')?.quantity || 0) + (state.employees || []).filter((e) => e.type === 'stagiaire').length >= 15, reward: { xp: 250 } },
+    { id: 'managers1', name: 'Premier cadre (manager)', target: () => (state.managers || []).some((m) => m.quantity > 0), reward: { xp: 300 } },
+    { id: 'managers3', name: '3 cadres différents', target: () => (state.managers || []).filter((m) => m.quantity > 0).length >= 3, reward: { xp: 800 } },
+    { id: 'training1', name: 'Une formation achetée', target: () => (state.training || []).some((t) => t.quantity > 0), reward: { xp: 400 } },
+    /* Bureaux & image */
+    { id: 'office1', name: 'Premier bureau', target: () => getOwnedOfficesCount() >= 1, reward: { xp: 100 } },
+    { id: 'bureaux3', name: '3 bureaux différents', target: () => getOwnedOfficesCount() >= 3, reward: { xp: 400 } },
+    { id: 'branding1', name: 'Premier achat image (branding)', target: () => (state.branding || []).some((b) => b.quantity > 0), reward: { xp: 150 } },
+    { id: 'brandingAll', name: 'Toute l\'image (3 brandings)', target: () => (state.branding || []).filter((b) => b.quantity > 0).length >= 3, reward: { xp: 600 } },
+    /* International & contrats */
+    { id: 'intl1', name: 'Un bureau international', target: () => (state.intlOffices || []).some((o) => o.quantity > 0), reward: { xp: 350 } },
+    { id: 'contrat1', name: 'Premier contrat livré', target: () => (state.contratsClaimedCount || 0) >= 1, reward: { xp: 200 } },
+    { id: 'rnd1', name: 'Une R&D achetée', target: () => (state.rnd || []).some((r) => r.purchased), reward: { xp: 500 } },
+    /* Chapitres */
+    { id: 'chapter1obj', name: 'Objectif chapitre 1 (1B crédits, niv.30)', target: () => (state.completedChapters || []).includes(1), reward: { xp: 1000 } },
+    { id: 'chapter2obj', name: 'Objectif chapitre 2 (1T crédits, niv.60)', target: () => (state.completedChapters || []).includes(2), reward: { xp: 2500 } },
+    /* Prestige */
+    { id: 'prestige1', name: 'Premier prestige', target: () => state.reputation >= 1, reward: { xp: 1500 } },
   ];
+  const QUEST_DISPLAY_LIMIT = 5;
 
   const PRESTIGE_BONUSES = [
     { id: 'prod10', name: '+10% prod passive', cost: 1, effect: { prodPercent: 10 } },
@@ -193,6 +239,7 @@
     intlOffices: INTERNATIONAL_OFFICES.map((o) => ({ id: o.id, quantity: 0 })),
     training: TRAINING_DEFS.map((t) => ({ id: t.id, quantity: 0 })),
     contrats: [],
+    contratsClaimedCount: 0,
     rnd: RND_DEFS.map((r) => ({ id: r.id, purchased: false })),
     chapterBonuses: {},
     completedQuests: [],
@@ -691,6 +738,7 @@
     if (!def || contrat.done || Date.now() < contrat.endsAt) return;
     state.credits += def.invest * def.rewardMult;
     contrat.done = true;
+    state.contratsClaimedCount = (state.contratsClaimedCount || 0) + 1;
     addXP(def.invest * 0.01);
     renderContrats();
     renderCredits();
@@ -891,6 +939,7 @@
     state.intlOffices.forEach((o) => (o.quantity = 0));
     state.training.forEach((t) => (t.quantity = 0));
     state.contrats = [];
+    state.contratsClaimedCount = 0;
     state.rnd.forEach((r) => (r.purchased = false));
     state.playerLevel = 1;
     state.playerXP = 0;
@@ -950,6 +999,7 @@
         intlOffices: state.intlOffices,
         training: state.training,
         contrats: state.contrats,
+        contratsClaimedCount: state.contratsClaimedCount,
         rnd: state.rnd,
         chapterBonuses: state.chapterBonuses,
         completedQuests: state.completedQuests,
@@ -1023,6 +1073,7 @@
       if (Array.isArray(data.intlOffices)) data.intlOffices.forEach((s) => { const os = getIntlOfficeState(s.id); if (os && typeof s.quantity === 'number') os.quantity = s.quantity; });
       if (Array.isArray(data.training)) data.training.forEach((s) => { const ts = getTrainingState(s.id); if (ts && typeof s.quantity === 'number') ts.quantity = s.quantity; });
       if (Array.isArray(data.contrats)) state.contrats = data.contrats;
+      if (typeof data.contratsClaimedCount === 'number') state.contratsClaimedCount = data.contratsClaimedCount;
       if (Array.isArray(data.rnd)) data.rnd.forEach((s) => { const rs = getRndState(s.id); if (rs && typeof s.purchased === 'boolean') rs.purchased = s.purchased; });
       if (typeof data.bestRunCredits === 'number') state.bestRunCredits = data.bestRunCredits;
       if (Array.isArray(data.purchasedPrestigeBonuses)) state.purchasedPrestigeBonuses = data.purchasedPrestigeBonuses;
@@ -1131,6 +1182,11 @@
     if (!modal || !emp) return;
     document.getElementById('error-modal-message').textContent = getRandomErrorMessage();
     document.getElementById('error-modal-name').textContent = emp.name + ' (' + (EMPLOYEE_TYPE_LABELS[emp.type] || emp.type) + ')';
+    var iconEl = document.getElementById('error-modal-icon');
+    if (iconEl) {
+      iconEl.src = (typeof window.getIconUrl === 'function') ? window.getIconUrl('error', 48) : FALLBACK_ICON;
+      iconEl.dataset.fallback = (typeof window.getFallbackIconPath === 'function') ? window.getFallbackIconPath() : FALLBACK_ICON;
+    }
     modal.setAttribute('data-employee-id', emp.id);
     modal.hidden = false;
   }
@@ -1165,6 +1221,7 @@
       row.setAttribute('data-index', i);
       row.innerHTML =
         '<div class="candidate-row-head" role="button" tabindex="0" aria-expanded="false">' +
+        getIconImg(EMPLOYEE_TYPE_ICONS[c.type] || 'user', 28) +
         '<span class="candidate-name">' + escapeHtml(c.name) + '</span>' +
         '<span class="candidate-type-badge">' + (EMPLOYEE_TYPE_LABELS[c.type] || c.type) + '</span>' +
         '<span class="candidate-prod">' + c.prodPerSec + ' créd/s</span>' +
@@ -1203,7 +1260,9 @@
     if (!btn) return;
     const cost = getRecruitmentRefreshCost();
     const affordable = canAfford(cost);
-    btn.textContent = 'Nouveaux candidats (' + formatNumber(cost) + ' crédits)';
+    var textEl = document.getElementById('recruitment-refresh-text');
+    if (textEl) textEl.textContent = 'Nouveaux candidats (' + formatNumber(cost) + ' crédits)';
+    else btn.textContent = 'Nouveaux candidats (' + formatNumber(cost) + ' crédits)';
     btn.disabled = !affordable;
     btn.classList.toggle('too-expensive', !affordable);
   }
@@ -1330,12 +1389,74 @@
     const container = document.getElementById('quests-list');
     if (!container) return;
     container.innerHTML = '';
-    QUEST_DEFS.forEach((q) => {
-      const done = state.completedQuests.includes(q.id);
-      const div = document.createElement('div');
+    var incomplete = QUEST_DEFS.filter(function (q) { return !state.completedQuests.includes(q.id); });
+    var toShow = incomplete.slice(0, QUEST_DISPLAY_LIMIT);
+    if (toShow.length === 0) {
+      var empty = document.createElement('p');
+      empty.className = 'quests-empty';
+      empty.textContent = 'Tous les objectifs affichés ici sont accomplis. Clique sur « Voir tous les objectifs » pour la liste complète.';
+      container.appendChild(empty);
+    } else {
+      toShow.forEach(function (q) {
+        var done = state.completedQuests.includes(q.id);
+        var div = document.createElement('div');
+        div.className = 'quest-item' + (done ? ' done' : '');
+        div.innerHTML = '<span>' + escapeHtml(q.name) + '</span><span class="quest-progress">' + (done ? '✓ Fait' : 'En cours') + '</span>';
+        container.appendChild(div);
+      });
+    }
+  }
+
+  function renderAllQuestsModal() {
+    var list = document.getElementById('all-quests-modal-list');
+    if (!list) return;
+    list.innerHTML = '';
+    QUEST_DEFS.forEach(function (q) {
+      var done = state.completedQuests.includes(q.id);
+      var div = document.createElement('div');
       div.className = 'quest-item' + (done ? ' done' : '');
       div.innerHTML = '<span>' + escapeHtml(q.name) + '</span><span class="quest-progress">' + (done ? '✓ Fait' : 'En cours') + '</span>';
-      container.appendChild(div);
+      list.appendChild(div);
+    });
+  }
+
+  function openAllQuestsModal() {
+    renderAllQuestsModal();
+    var modal = document.getElementById('all-quests-modal');
+    if (modal) modal.hidden = false;
+  }
+
+  function closeAllQuestsModal() {
+    var modal = document.getElementById('all-quests-modal');
+    if (modal) modal.hidden = true;
+  }
+
+  function renderSettingsAllQuests() {
+    var list = document.getElementById('settings-all-quests-list');
+    if (!list) return;
+    list.innerHTML = '';
+    QUEST_DEFS.forEach(function (q) {
+      var done = state.completedQuests.includes(q.id);
+      var div = document.createElement('div');
+      div.className = 'quest-item' + (done ? ' done' : '');
+      div.innerHTML = '<span>' + escapeHtml(q.name) + '</span><span class="quest-progress">' + (done ? '✓ Fait' : 'En cours') + '</span>';
+      list.appendChild(div);
+    });
+  }
+
+  function renderSettingsCompletedQuests() {
+    var list = document.getElementById('settings-completed-quests-list');
+    var emptyEl = document.getElementById('settings-completed-quests-empty');
+    if (!list) return;
+    list.innerHTML = '';
+    var completedSet = state.completedQuests || [];
+    var completed = QUEST_DEFS.filter(function (q) { return completedSet.includes(q.id); });
+    if (emptyEl) emptyEl.hidden = completed.length > 0;
+    completed.forEach(function (q) {
+      var div = document.createElement('div');
+      div.className = 'settings-completed-quest-item';
+      div.textContent = q.name;
+      list.appendChild(div);
     });
   }
 
@@ -1485,11 +1606,11 @@
       if (active) {
         const left = Math.max(0, (active.endsAt - Date.now()) / 1000);
         const canClaim = left <= 0;
-        card.innerHTML = '<span class="name">' + escapeHtml(def.name) + '</span><span class="desc">' + (canClaim ? 'Terminé !' : 'En cours : ' + formatDuration(left)) + '</span><button type="button" class="contrat-claim" ' + (canClaim ? '' : 'disabled') + '>' + (canClaim ? 'Récupérer ' + formatNumber(def.invest * def.rewardMult) + ' crédits' : 'En attente') + '</button>';
+        card.innerHTML = getIconImg('document', 32) + '<span class="name">' + escapeHtml(def.name) + '</span><span class="desc">' + (canClaim ? 'Terminé !' : 'En cours : ' + formatDuration(left)) + '</span><button type="button" class="contrat-claim" ' + (canClaim ? '' : 'disabled') + '>' + (canClaim ? 'Récupérer ' + formatNumber(def.invest * def.rewardMult) + ' crédits' : 'En attente') + '</button>';
         card.querySelector('.contrat-claim')?.addEventListener('click', () => claimContrat(active));
       } else {
         const affordable = canAfford(def.invest);
-        card.innerHTML = '<span class="name">' + escapeHtml(def.name) + '</span><span class="desc">Investis ' + formatNumber(def.invest) + ', récupère ' + formatNumber(def.invest * def.rewardMult) + ' après ' + def.duration + 's</span><button type="button" class="contrat-start" ' + (affordable ? '' : 'disabled') + '>Démarrer</button>';
+        card.innerHTML = getIconImg('document', 32) + '<span class="name">' + escapeHtml(def.name) + '</span><span class="desc">Investis ' + formatNumber(def.invest) + ', récupère ' + formatNumber(def.invest * def.rewardMult) + ' après ' + def.duration + 's</span><button type="button" class="contrat-start" ' + (affordable ? '' : 'disabled') + '>Démarrer</button>';
         card.querySelector('.contrat-start')?.addEventListener('click', () => startContrat(def.id));
       }
       container.appendChild(card);
@@ -1674,6 +1795,8 @@
     renderReputationShop();
     renderBestRun();
     renderPrestige();
+    renderSettingsAllQuests();
+    renderSettingsCompletedQuests();
   }
 
   function gameLoop(now) {
@@ -1826,6 +1949,8 @@
       if (id) { licencierEmployee(id); hideErrorModal(); }
     });
     document.getElementById('recruitment-refresh-btn')?.addEventListener('click', refreshRecruitmentContracts);
+    document.getElementById('btn-show-all-quests')?.addEventListener('click', openAllQuestsModal);
+    document.getElementById('all-quests-modal-close')?.addEventListener('click', closeAllQuestsModal);
 
     document.getElementById('btn-deconnexion')?.addEventListener('click', function () {
       try {

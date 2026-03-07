@@ -900,14 +900,19 @@ body.tapstorm-theme #game-screen.app {
   padding-left: 0;
   padding-right: 0;
 }
-/* Header style Rocket Rush : une barre claire, titre + devise + profit/h */
+/* Header style Rocket Rush : barre fixe en scroll */
 body.tapstorm-theme #game-screen .idle-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
   background: linear-gradient(180deg, #1e1b2e 0%, #161424 100%);
   border-radius: 0 0 20px 20px;
   padding: 12px 16px 14px;
   margin: 0 -16px 20px -16px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.25);
   border: 1px solid rgba(139, 92, 246, 0.2);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
 }
 body.tapstorm-theme #game-screen .header-row {
   display: flex;
@@ -933,8 +938,9 @@ body.tapstorm-theme #game-screen .header-currency {
   border-radius: 9999px;
   border: 1px solid rgba(251, 191, 36, 0.35);
 }
-body.tapstorm-theme #game-screen .header-coin {
-  font-size: 1.15rem;
+body.tapstorm-theme #game-screen .header-coin-icon {
+  flex-shrink: 0;
+  filter: brightness(1.25) contrast(1.1);
 }
 body.tapstorm-theme #game-screen .header-credits {
   font-weight: 700;
@@ -1039,23 +1045,17 @@ body.tapstorm-theme #game-screen .tapstorm-cta:hover {
 body.tapstorm-theme #game-screen .clicker-section {
   margin-bottom: 8px;
 }
-body.tapstorm-theme #game-screen .accueil-code-anim {
-  background: rgba(45, 27, 105, 0.5);
-  border-color: rgba(139, 92, 246, 0.5);
-  color: #f1f1f4;
+body.tapstorm-theme #game-screen .accueil-code-window {
+  background: linear-gradient(180deg, rgba(45, 27, 105, 0.95) 0%, rgba(30, 20, 60, 0.98) 100%);
+  border-color: rgba(139, 92, 246, 0.6);
 }
-body.tapstorm-theme #game-screen .accueil-bracket {
-  color: #c4b5fd;
+body.tapstorm-theme #game-screen .accueil-code-title {
+  color: rgba(255, 255, 255, 0.8);
+  border-bottom-color: rgba(139, 92, 246, 0.4);
 }
-body.tapstorm-theme #game-screen .accueil-word {
-  color: #e9d5ff;
-}
-body.tapstorm-theme #game-screen .accueil-cursor {
-  background: #a78bfa;
-  box-shadow: 0 0 12px rgba(167, 139, 250, 0.9);
-}
-body.tapstorm-theme #game-screen .accueil-tag {
-  color: rgba(255, 255, 255, 0.65);
+body.tapstorm-theme #game-screen .accueil-code-row .accueil-cursor {
+  background: #c4b5fd;
+  box-shadow: 0 0 16px rgba(196, 181, 253, 0.9);
 }
 body.tapstorm-theme .click-profit-popup {
   color: #4ade80;
@@ -1110,6 +1110,17 @@ body.tapstorm-theme #game-screen .candidate-sign-detail {
   background: #8b5cf6;
   color: #fff;
   border-radius: 8px;
+}
+/* Icônes lisibles sur fond sombre TapStorm */
+body.tapstorm-theme #game-screen .game-icon {
+  filter: brightness(1.25) contrast(1.15);
+  opacity: 1;
+}
+body.tapstorm-theme #game-screen .error-modal-icon {
+  filter: brightness(1.2) contrast(1.1);
+}
+body.tapstorm-theme #game-screen .btn-prestige .game-icon {
+  filter: brightness(1.3);
 }
 /* Cartes TapStorm (fond gris foncé, bordure violette) */
 body.tapstorm-theme #game-screen .tapstorm-cards {
@@ -1236,6 +1247,8 @@ body.tapstorm-theme #game-screen .quests-list {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  max-height: 340px;
+  overflow-y: auto;
 }
 body.tapstorm-theme #game-screen .quests-list .quest-item,
 body.tapstorm-theme #game-screen .quests-list > * {
@@ -1299,6 +1312,18 @@ body.tapstorm-theme #game-screen .tapstorm-nav .tab-btn .nav-icon {
   font-size: 1.25rem;
   line-height: 1;
   flex-shrink: 0;
+  display: block;
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  filter: brightness(1.25) contrast(1.1);
+}
+body.tapstorm-theme #game-screen .tapstorm-nav .nav-click-btn .nav-click-icon {
+  width: 28px;
+  height: 28px;
+  display: block;
+  object-fit: contain;
+  filter: brightness(1.3);
 }
 body.tapstorm-theme #game-screen .tapstorm-nav .tab-btn .nav-label {
   font-size: 0.65rem;
