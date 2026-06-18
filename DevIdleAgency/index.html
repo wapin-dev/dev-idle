@@ -58,6 +58,10 @@
       <header class="header idle-header">
         <div class="header-row header-row-main">
           <span id="header-agency-name" class="header-title">DevIdle Agency</span>
+          <button type="button" id="header-errors-btn" class="header-errors-btn" aria-label="Erreurs en attente" title="Erreurs en attente" hidden>
+            <img class="game-icon" data-icon="error" src="/assets/icons/placeholder.svg" alt="" width="22" height="22" data-fallback="/assets/icons/placeholder.svg">
+            <span id="header-errors-badge" class="header-errors-badge" hidden>0</span>
+          </button>
           <div class="header-currency">
             <img id="header-coin-icon" class="game-icon header-coin-icon" src="/assets/icons/placeholder.svg" alt="" width="22" height="22" data-fallback="/assets/icons/placeholder.svg">
             <span id="credits" class="header-credits">0</span>
@@ -126,7 +130,31 @@
         <!-- Onglet Équipe : employés, cadres, formations -->
         <section class="tab-panel tapstorm-panel" id="tab-equipe" hidden>
           <h2 class="panel-title">Équipe</h2>
-          <div id="employees-list" class="employees-list"></div>
+          <div class="equipe-errors-block tapstorm-card" id="settings-pending-errors-block">
+            <p class="settings-hint" id="settings-pending-errors-empty">Aucune erreur en attente.</p>
+            <div id="settings-pending-errors-list" class="settings-pending-errors-list"></div>
+            <p class="settings-hint equipe-errors-hint" id="settings-pending-errors-hint">Erreurs non traitées (croix du popup). Clique sur « Traiter » pour Pardonner ou Licencier.</p>
+          </div>
+          <div class="equipe-skill-tree-entry tapstorm-card">
+            <div class="equipe-skill-tree-entry-inner">
+              <span class="equipe-skill-tree-label">Arbre de compétences</span>
+              <p class="settings-hint">Débloque des compétences avec la réputation, puis attribue-les à tes devs.</p>
+              <button type="button" id="btn-open-skill-tree" class="tapstorm-btn tapstorm-btn-secondary">Ouvrir l'arbre</button>
+            </div>
+          </div>
+          <div class="modal-overlay" id="skill-tree-modal" hidden>
+            <div class="modal modal-popup skill-tree-modal">
+              <button type="button" class="modal-close" id="skill-tree-modal-close" aria-label="Fermer">&times;</button>
+              <h3 class="modal-title">Arbre de compétences</h3>
+              <p class="modal-subtitle">Débloque avec la réputation. Puis attribue les compétences aux devs dans leur fiche.</p>
+              <div id="skill-tree-list" class="skill-tree-list"></div>
+            </div>
+          </div>
+          <h3 class="section-subtitle">Développeurs seniors</h3>
+          <p class="tab-desc">Seuls les seniors peuvent être mentors (juniors et stagiaires). Une erreur d’un membre de l’équipe impacte toute l’équipe du mentor.</p>
+          <div id="employees-list-seniors" class="employees-list employees-list-seniors"></div>
+          <h3 class="section-subtitle">Juniors & stagiaires</h3>
+          <div id="employees-list-team" class="employees-list employees-list-team"></div>
           <h3 class="section-subtitle">Cadres</h3>
           <div id="managers-list" class="upgrades-list tapstorm-cards"></div>
           <h3 class="section-subtitle">Formations</h3>
@@ -226,7 +254,13 @@
       <nav class="shop-tabs tapstorm-nav">
         <button type="button" class="tab-btn active" data-tab="accueil"><img class="nav-icon game-icon" data-icon="home" src="/assets/icons/placeholder.svg" alt="" width="24" height="24" data-fallback="/assets/icons/placeholder.svg"><span class="nav-label">Accueil</span></button>
         <button type="button" class="tab-btn" data-tab="candidats"><img class="nav-icon game-icon" data-icon="user" src="/assets/icons/placeholder.svg" alt="" width="24" height="24" data-fallback="/assets/icons/placeholder.svg"><span class="nav-label">Candidats</span></button>
-        <button type="button" class="tab-btn" data-tab="equipe"><img class="nav-icon game-icon" data-icon="user-group" src="/assets/icons/placeholder.svg" alt="" width="24" height="24" data-fallback="/assets/icons/placeholder.svg"><span class="nav-label">Équipe</span></button>
+        <button type="button" class="tab-btn" data-tab="equipe">
+            <span class="tab-btn-badge-wrap">
+              <img class="nav-icon game-icon" data-icon="user-group" src="/assets/icons/placeholder.svg" alt="" width="24" height="24" data-fallback="/assets/icons/placeholder.svg">
+              <span id="tab-equipe-errors-badge" class="tab-errors-badge" aria-hidden="true" hidden>0</span>
+            </span>
+            <span class="nav-label">Équipe</span>
+          </button>
         <button type="button" id="btn-code-nav" class="nav-click-btn" aria-label="Coder une feature"><img class="nav-click-icon game-icon" data-icon="flash" src="/assets/icons/placeholder.svg" alt="" width="28" height="28" data-fallback="/assets/icons/placeholder.svg"></button>
         <button type="button" class="tab-btn" data-tab="boutique"><img class="nav-icon game-icon" data-icon="shopping-cart" src="/assets/icons/placeholder.svg" alt="" width="24" height="24" data-fallback="/assets/icons/placeholder.svg"><span class="nav-label">Boutique</span></button>
         <button type="button" class="tab-btn" data-tab="plus"><img class="nav-icon game-icon" data-icon="list" src="/assets/icons/placeholder.svg" alt="" width="24" height="24" data-fallback="/assets/icons/placeholder.svg"><span class="nav-label">Plus</span></button>
@@ -275,11 +309,23 @@
           <h3 class="modal-title">Erreur en prod</h3>
           <p id="error-modal-message" class="error-message"></p>
           <p id="error-modal-name" class="error-modal-name"></p>
-          <p class="tab-desc">La production de cet employé (et de son équipe s'il est mentor) est bloquée pendant 30 s.</p>
+          <p id="error-modal-impact" class="error-modal-impact" hidden></p>
+          <p class="tab-desc">La production de cet employé (et de son équipe s'il est mentor) est bloquée pendant 30 s. Fermer sans choisir envoie l'erreur en notification.</p>
           <div class="levelup-choices">
             <button type="button" class="levelup-choice" id="error-modal-pardonner">Pardonner</button>
             <button type="button" class="levelup-choice levelup-choice-danger" id="error-modal-licencier">Licencier</button>
           </div>
+        </div>
+      </div>
+      <div class="modal-overlay" id="error-detail-modal" hidden>
+        <div class="modal modal-popup">
+          <button type="button" class="modal-close" id="error-detail-modal-close" aria-label="Fermer">&times;</button>
+          <h3 class="modal-title">Détail de l'erreur</h3>
+          <p id="error-detail-message" class="error-message"></p>
+          <p id="error-detail-name" class="error-modal-name"></p>
+          <p class="tab-desc">Impact :</p>
+          <p id="error-detail-impact" class="error-modal-impact"></p>
+          <button type="button" class="levelup-choice" id="error-detail-traiter" hidden>Traiter (Pardonner / Licencier)</button>
         </div>
       </div>
     </section>

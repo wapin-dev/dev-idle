@@ -439,6 +439,44 @@ html {
 .settings-all-quests-list {
   margin-top: 8px;
 }
+.error-modal-impact {
+  font-size: 0.9rem;
+  color: var(--danger);
+  margin: 8px 0 0;
+}
+.settings-pending-errors-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+.settings-pending-error-item {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-alt);
+  border-left: 3px solid var(--danger);
+}
+.settings-pending-error-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.settings-pending-error-name { font-weight: 600; }
+.settings-pending-error-impact { font-size: 0.85rem; color: var(--text-muted); }
+.settings-pending-error-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.equipe-errors-block {
+  margin-bottom: 16px;
+}
+.equipe-errors-block .settings-hint.equipe-errors-hint {
+  margin-top: 8px;
+  margin-bottom: 0;
+}
+.employees-list-seniors { margin-bottom: 20px; }
+.employees-list-team { margin-bottom: 16px; }
 
 /* ----- Shop tabs ----- */
 .shop-tabs {
@@ -465,6 +503,26 @@ html {
 .tab-btn.active {
   background: var(--surface);
   color: var(--accent);
+}
+
+.tab-btn-badge-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.tab-errors-badge {
+  position: absolute;
+  top: -4px;
+  right: -6px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  color: #fff;
+  background: var(--danger);
+  border-radius: 8px;
 }
 
 .tab-desc {
@@ -516,6 +574,31 @@ body.game-active .game-icon[src*="placeholder"] {
   filter: brightness(1.15) contrast(1.1);
 }
 
+.header-errors-btn {
+  position: relative;
+  padding: 6px;
+  margin-right: 4px;
+  background: var(--surface);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--text);
+}
+.header-errors-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  color: #fff;
+  background: var(--danger);
+  border-radius: 9px;
+}
 .header-currency {
   display: flex;
   align-items: center;
@@ -743,6 +826,138 @@ body.game-active .game-icon[src*="placeholder"] {
 .employee-row.has-error {
   border-left-color: var(--danger);
   opacity: 0.95;
+}
+.employee-row.has-mentor-penalty {
+  border-left-color: var(--reputation);
+}
+.employee-row-head .employee-status.mentor-penalty {
+  color: var(--reputation);
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+.employee-detail-line.employee-detail-mentor-penalty {
+  color: var(--reputation);
+  margin-top: 6px;
+}
+.employee-detail-line.employee-detail-mentees {
+  margin-top: 6px;
+}
+.employee-detail-mentees .mentees-list {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  list-style: disc;
+}
+.employee-detail-mentees .mentees-list li {
+  margin-bottom: 2px;
+}
+.mentee-caused-penalty {
+  color: var(--reputation);
+  font-size: 0.85em;
+  font-style: italic;
+}
+.employee-detail-upgrades {
+  font-size: 0.85rem;
+  color: var(--accent);
+}
+.employee-detail-buy-upgrades {
+  margin-top: 8px;
+}
+.employee-upgrade-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.employee-upgrade-buttons .btn-employee-upgrade {
+  font-size: 0.75rem;
+  padding: 4px 8px;
+}
+.employee-upgrade-buttons .btn-employee-upgrade.too-expensive {
+  opacity: 0.7;
+}
+
+/* ----- Arbre de compétences ----- */
+.equipe-skill-tree-entry {
+  padding: 12px 14px;
+  margin-bottom: 16px;
+}
+.equipe-skill-tree-entry-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.equipe-skill-tree-entry .settings-hint {
+  margin: 0;
+  font-size: 0.85rem;
+}
+.equipe-skill-tree-label {
+  font-weight: 700;
+  font-size: 1rem;
+}
+.equipe-skill-tree-entry .tapstorm-btn {
+  align-self: flex-start;
+}
+.skill-tree-modal .modal {
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+.skill-tree-modal .skill-tree-list {
+  overflow-y: auto;
+  max-height: 60vh;
+  margin-top: 8px;
+  padding-right: 4px;
+}
+.skill-tree-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 0;
+}
+.skill-tree-card {
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border-left: 4px solid var(--text-muted);
+}
+.skill-tree-card-unlocked {
+  border-left-color: var(--accent);
+  background: rgba(0, 217, 165, 0.06);
+}
+.skill-tree-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.skill-tree-name {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+.skill-tree-cost {
+  font-size: 0.8rem;
+  color: var(--reputation);
+  font-weight: 600;
+}
+.skill-tree-badge {
+  font-size: 0.75rem;
+  color: var(--accent);
+  font-weight: 600;
+}
+.skill-tree-desc {
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+.skill-tree-requires {
+  margin: 0 0 8px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+.skill-tree-card .btn-unlock-skill.too-expensive {
+  opacity: 0.7;
 }
 
 .employee-row-head {
@@ -1003,11 +1218,20 @@ body.game-active .game-icon[src*="placeholder"] {
 }
 
 .assign-mentor-select {
-  padding: 4px 8px;
-  border-radius: 4px;
-  background: var(--surface-alt);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
   color: var(--text);
-  font-size: 0.8rem;
+  border: 1px solid var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 500;
+  min-width: 180px;
+  cursor: pointer;
+}
+.assign-mentor-select option {
+  background: var(--bg);
+  color: var(--text);
+  padding: 6px 8px;
   max-width: 100%;
 }
 

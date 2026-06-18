@@ -3,6 +3,8 @@
 
   const SAVE_KEY = 'agence-dev-idle-save-v4';
   const SAVE_VERSION = 1;
+  const SYNC_TO_SERVER_THROTTLE_MS = 2 * 60 * 1000;
+  var lastSyncToServer = 0;
   const TICK_MS = 100;
   const EVENT_MIN_INTERVAL_MS = 60 * 1000;
   const EVENT_MAX_INTERVAL_MS = 3 * 60 * 1000;
@@ -14,6 +16,7 @@
   const RECRUITMENT_REFRESH_PERCENT = 0.001;
   const ERROR_ROLL_INTERVAL_MS = 45 * 1000;
   const ERROR_BLOCK_DURATION_MS = 30 * 1000;
+  const MENTOR_PENALTY_DURATION_MS = 25 * 1000;
   const MENTOR_SLOTS_JUNIOR = 2;
   const MENTOR_SLOTS_SENIOR = 3;
   const MENTOR_PROD_BONUS = 0.2;
@@ -39,9 +42,87 @@
   const EMPLOYEE_TYPE_ERROR_RANGES = {
     stagiaire: { min: 0.03, max: 0.12 },
     junior: { min: 0.01, max: 0.06 },
-    senior: { min: 0.005, max: 0.03 },
+    senior: { min: 0.002, max: 0.012 },
   };
+  function clampErrorChance(emp) {
+    var range = EMPLOYEE_TYPE_ERROR_RANGES[emp.type];
+    if (!range) return;
+    var v = emp.errorChance;
+    if (typeof v !== 'number' || isNaN(v)) return;
+    emp.errorChance = Math.max(range.min, Math.min(range.max, v));
+  }
+  function evolveErrorChance(emp, impact) {
+    if (!emp) return;
+    var range = EMPLOYEE_TYPE_ERROR_RANGES[emp.type] || { min: 0.001, max: 0.15 };
+    var current = typeof emp.errorChance === 'number' && !isNaN(emp.errorChance) ? emp.errorChance : (range.min + range.max) / 2;
+    var delta = 0;
+    if (impact === 'made_error') {
+      if (Math.random() < 0.6) delta = 0.0008 + Math.random() * 0.0022;
+      else delta = -(0.0004 + Math.random() * 0.0008);
+    } else if (impact === 'pardoned') {
+      delta = -(0.0012 + Math.random() * 0.0018);
+    } else if (impact === 'mentee_pardoned') {
+      delta = 0.0004 + Math.random() * 0.0012;
+    }
+    emp.errorChance = Math.max(range.min, Math.min(range.max, current + delta));
+  }
+  const ERROR_IMPACT_DURATION_MS = 30 * 1000;
+  const ERROR_IMPACT_TYPES = [
+    { id: 'production', name: 'Production', desc: 'Réduit la production de l\'agence pendant %d s.', penaltyPercent: 10, durationMs: 30000 },
+    { id: 'profit', name: 'Profit', desc: 'A causé une perte de crédits (déjà déduite).', creditPercent: 2 },
+    { id: 'reputation', name: 'Réputation', desc: 'A nui à la réputation client.', reputationPenalty: 1 },
+    { id: 'delivery', name: 'Livraison', desc: 'Retard sur une livraison : production réduite pendant %d s.', penaltyPercent: 15, durationMs: 45000 },
+  ];
   const EMPLOYEE_TYPE_COST_BASE = { stagiaire: 20, junior: 80, senior: 200 };
+  const EMPLOYEE_UPGRADES = [
+    { id: 'linter', name: 'Linter strict', desc: 'Réduit les erreurs de typo et de style. Moins de bugs en prod.', reputationCost: 5, requires: null, errorAdd: -0.008 },
+    { id: 'repoDoc', name: 'Doc du repo à jour', desc: 'Le dev consulte la doc avant de coder. Moins de mauvaises surprises.', reputationCost: 5, requires: null, errorAdd: -0.009 },
+    { id: 'meditation', name: 'Séance de méditation', desc: 'Gestion du stress, moins d\'erreurs sous pression.', reputationCost: 6, requires: null, errorAdd: -0.006 },
+    { id: 'cafeIllimite', name: 'Café illimité', desc: 'Boost de productivité… et de nervosité. Risque d\'erreur +.', reputationCost: 3, requires: null, prodPercent: 10, errorAdd: 0.005 },
+    { id: 'secondEcran', name: 'Second écran', desc: 'Moins de context switch, plus de focus. Productivité +.', reputationCost: 8, requires: null, prodPercent: 5 },
+    { id: 'tests', name: 'Tests unitaires', desc: 'Le dev écrit des tests avant de merger. Qualité en hausse.', reputationCost: 10, requires: 'linter', errorAdd: -0.012 },
+    { id: 'clavierErgo', name: 'Clavier ergonomique', desc: 'Confort et moins de fatigue en fin de journée.', reputationCost: 10, requires: 'secondEcran', prodPercent: 3, errorAdd: -0.004 },
+    { id: 'formationQualite', name: 'Formation qualité', desc: 'Une semaine de formation aux bonnes pratiques.', reputationCost: 15, requires: 'tests', errorAdd: -0.015 },
+    { id: 'pairProg', name: 'Pair programming', desc: 'Code review en continu. Moins d\'erreurs, un peu moins de vélocité.', reputationCost: 18, requires: 'formationQualite', errorAdd: -0.018, prodPercent: -6 },
+    { id: 'certif', name: 'Certification reconnue', desc: 'Passage d\'une cert (AWS, Google…). Prestige et compétences.', reputationCost: 25, requires: 'formationQualite', prodPercent: 8, errorAdd: -0.008 },
+  ];
+  function getEmployeeUpgradeDef(id) { return EMPLOYEE_UPGRADES.find(function (u) { return u.id === id; }); }
+  function isEmployeeUpgradeUnlocked(upgradeId) { return (state.unlockedEmployeeUpgrades || []).indexOf(upgradeId) >= 0; }
+  function canUnlockEmployeeUpgrade(upgradeId) {
+    if (isEmployeeUpgradeUnlocked(upgradeId)) return false;
+    var def = getEmployeeUpgradeDef(upgradeId);
+    if (!def || typeof def.reputationCost !== 'number') return false;
+    if ((state.reputation || 0) < def.reputationCost) return false;
+    if (def.requires && !isEmployeeUpgradeUnlocked(def.requires)) return false;
+    return true;
+  }
+  function unlockEmployeeUpgrade(upgradeId) {
+    if (!canUnlockEmployeeUpgrade(upgradeId)) return;
+    var def = getEmployeeUpgradeDef(upgradeId);
+    if (!def) return;
+    state.reputation = Math.max(0, (state.reputation || 0) - def.reputationCost);
+    (state.unlockedEmployeeUpgrades = state.unlockedEmployeeUpgrades || []).push(upgradeId);
+    renderSkillTree();
+    renderEmployeesList();
+    renderReputation();
+  }
+  function getEmployeeEffectiveErrorChance(emp) {
+    if (!emp) return 0;
+    var range = EMPLOYEE_TYPE_ERROR_RANGES[emp.type] || { min: 0.001, max: 0.2 };
+    var base = typeof emp.errorChance === 'number' && !isNaN(emp.errorChance) ? emp.errorChance : range.min;
+    var add = (emp.upgrades || []).reduce(function (sum, uid) {
+      var d = getEmployeeUpgradeDef(uid);
+      return sum + (d && typeof d.errorAdd === 'number' ? d.errorAdd : 0);
+    }, 0);
+    return Math.max(0, Math.min(range.max, base + add));
+  }
+  function getEmployeeProdBonusPercent(emp) {
+    if (!emp) return 0;
+    return (emp.upgrades || []).reduce(function (sum, uid) {
+      var d = getEmployeeUpgradeDef(uid);
+      return sum + (d && typeof d.prodPercent === 'number' ? d.prodPercent : 0);
+    }, 0);
+  }
   const TRAITS = [
     'Consciencieux', 'Distrait', 'Génie du dimanche', 'Pédagogue', 'Stressé',
     'Zen', 'Perfectionniste', 'Bricoleur', 'Pragmatique', 'Rêveur',
@@ -246,6 +327,7 @@
     chapter: 1,
     completedChapters: [],
     reputation: 0,
+    unlockedEmployeeUpgrades: [],
     prestigeBonuses: {},
     purchasedPrestigeBonuses: [],
     agencyName: 'Mon Agence',
@@ -257,10 +339,16 @@
     employees: [],
     nextErrorRollAt: 0,
     errorModalEmployeeId: null,
+    pendingErrors: [],
+    activeErrorImpacts: [],
+    currentErrorRecord: null,
+    errorModalFromPending: false,
+    forceSyncNextSave: false,
     lastContractRefreshAt: 0,
   };
 
   let lastTick = 0;
+  var lastMentorPenaltyRender = 0;
 
   function randomId() {
     return 'id_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9);
@@ -297,7 +385,7 @@
   }
 
   function createEmployeeFromContract(contract) {
-    const mentorSlots = contract.type === 'junior' ? MENTOR_SLOTS_JUNIOR : contract.type === 'senior' ? MENTOR_SLOTS_SENIOR : 0;
+    const mentorSlots = contract.type === 'senior' ? MENTOR_SLOTS_SENIOR : 0;
     return {
       id: randomId(),
       type: contract.type,
@@ -310,10 +398,18 @@
       isActive: true,
       hasError: false,
       errorUntil: 0,
+      mentorPenaltyUntil: 0,
       menteesIds: [],
       mentorId: null,
       mentorSlots,
+      upgrades: [],
     };
+  }
+
+  function getMentorPenaltyRemainingSec(emp) {
+    if (!emp || !emp.mentorPenaltyUntil) return 0;
+    var r = Math.ceil((emp.mentorPenaltyUntil - Date.now()) / 1000);
+    return r > 0 ? r : 0;
   }
 
   function getEmployee(id) {
@@ -365,11 +461,21 @@
     if (!emp || !emp.isActive) return 0;
     const now = Date.now();
     if (emp.hasError && now < (emp.errorUntil || 0)) return 0;
+    if ((emp.mentorPenaltyUntil || 0) > now) return 0;
     if (emp.mentorId) {
       const mentor = getEmployee(emp.mentorId);
       if (mentor && mentor.hasError && now < (mentor.errorUntil || 0)) return 0;
     }
+    var menteesIds = emp.menteesIds || [];
+    if (menteesIds.length > 0) {
+      for (var i = 0; i < menteesIds.length; i++) {
+        var m = getEmployee(menteesIds[i]);
+        if (m && m.hasError && now < (m.errorUntil || 0)) return 0;
+      }
+    }
     let prod = Number(emp.prodPerSec) || 0;
+    var prodBonus = getEmployeeProdBonusPercent(emp);
+    prod *= 1 + prodBonus / 100;
     if (emp.mentorId) prod *= 1 + MENTOR_PROD_BONUS;
     return prod;
   }
@@ -380,23 +486,75 @@
 
   function rollEmployeeErrors() {
     const now = Date.now();
-    let firstErrorEmp = null;
+    var errorEmps = [];
     (state.employees || []).forEach((emp) => {
       if (!emp.isActive || emp.hasError) return;
-      if (Math.random() < emp.errorChance) {
+      if (Math.random() < getEmployeeEffectiveErrorChance(emp)) {
         emp.hasError = true;
         emp.errorUntil = now + ERROR_BLOCK_DURATION_MS;
-        if (!firstErrorEmp) firstErrorEmp = emp;
+        evolveErrorChance(emp, 'made_error');
+        errorEmps.push(emp);
       }
     });
-    if (firstErrorEmp) {
-      state.errorModalEmployeeId = firstErrorEmp.id;
-      showErrorModal(firstErrorEmp);
+    if (errorEmps.length === 0) return;
+    var first = errorEmps[0];
+    var firstRecord = createErrorRecord(first);
+    state.currentErrorRecord = firstRecord;
+    state.errorModalEmployeeId = first.id;
+    showErrorModal(first, firstRecord);
+    for (var i = 1; i < errorEmps.length; i++) {
+      var rec = createErrorRecord(errorEmps[i]);
+      (state.pendingErrors = state.pendingErrors || []).push(rec);
     }
+    renderPendingErrorsBadge();
+    renderSettingsPendingErrors();
   }
 
   function getRandomErrorMessage() {
     return pickRandom(ERROR_MESSAGES);
+  }
+
+  function createErrorRecord(emp) {
+    var impactDef = pickRandom(ERROR_IMPACT_TYPES);
+    var id = 'err_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+    var message = getRandomErrorMessage();
+    var now = Date.now();
+    var record = {
+      id: id,
+      employeeId: emp.id,
+      employeeName: emp.name,
+      employeeType: emp.type,
+      message: message,
+      impactType: impactDef.id,
+      impactName: impactDef.name,
+      impactDescription: impactDef.desc,
+      impactDetail: '',
+      happenedAt: now,
+    };
+    if (impactDef.penaltyPercent && impactDef.durationMs) {
+      var until = now + impactDef.durationMs;
+      record.productionPenaltyPercent = impactDef.penaltyPercent;
+      record.productionPenaltyUntil = until;
+      record.impactDetail = '-' + impactDef.penaltyPercent + '% production pendant ' + Math.round(impactDef.durationMs / 1000) + ' s';
+      (state.activeErrorImpacts = state.activeErrorImpacts || []).push({ percent: impactDef.penaltyPercent, until: until });
+    }
+    if (impactDef.creditPercent) {
+      var wealth = Math.max(state.credits || 0, 100);
+      var penalty = Math.max(10, Math.floor(wealth * (impactDef.creditPercent / 100)));
+      state.credits = Math.max(0, (state.credits || 0) - penalty);
+      record.creditPenalty = penalty;
+      record.impactDetail = 'Perte de ' + formatNumber(penalty) + ' crédits';
+    }
+    if (impactDef.reputationPenalty) {
+      state.reputation = Math.max(0, (state.reputation || 0) - impactDef.reputationPenalty);
+      record.reputationPenalty = impactDef.reputationPenalty;
+      record.impactDetail = '-1 réputation';
+    }
+    return record;
+  }
+
+  function removeErrorFromPending(employeeId) {
+    state.pendingErrors = (state.pendingErrors || []).filter(function (e) { return e.employeeId !== employeeId; });
   }
 
   function pardonnerEmployee(empId) {
@@ -404,10 +562,24 @@
     if (!emp) return;
     emp.hasError = false;
     emp.errorUntil = 0;
+    evolveErrorChance(emp, 'pardoned');
+    if (emp.mentorId) {
+      var mentor = getEmployee(emp.mentorId);
+      if (mentor) {
+        mentor.mentorPenaltyUntil = Date.now() + MENTOR_PENALTY_DURATION_MS;
+        mentor.mentorPenaltyCausedBy = empId;
+        evolveErrorChance(mentor, 'mentee_pardoned');
+      }
+    }
     state.errorModalEmployeeId = null;
+    state.currentErrorRecord = null;
+    state.errorModalFromPending = false;
+    removeErrorFromPending(empId);
     hideErrorModal();
     renderEmployeesList();
     renderCredits();
+    renderPendingErrorsBadge();
+    renderSettingsPendingErrors();
   }
 
   function licencierEmployee(empId) {
@@ -424,18 +596,23 @@
     state.employees = state.employees.filter((e) => e.id !== empId);
     if (state.errorModalEmployeeId === empId) {
       state.errorModalEmployeeId = null;
+      state.currentErrorRecord = null;
+      state.errorModalFromPending = false;
       hideErrorModal();
     }
+    removeErrorFromPending(empId);
     if (state.reputation > 0) state.reputation = Math.max(0, state.reputation - 1);
     renderEmployeesList();
     renderCredits();
+    renderPendingErrorsBadge();
+    renderSettingsPendingErrors();
   }
 
   function assignMentee(mentorId, menteeId) {
     if (mentorId === menteeId) return;
     const mentor = getEmployee(mentorId);
     const mentee = getEmployee(menteeId);
-    if (!mentor || !mentee || mentor.type === 'stagiaire') return;
+    if (!mentor || !mentee || mentor.type !== 'senior') return;
     if ((mentor.mentorSlots || 0) <= (mentor.menteesIds || []).length) return;
     if (mentee.type !== 'stagiaire' && mentee.type !== 'junior') return;
     if (mentee.mentorId) {
@@ -454,6 +631,16 @@
     const mentor = getEmployee(mentee.mentorId);
     if (mentor) mentor.menteesIds = (mentor.menteesIds || []).filter((id) => id !== menteeId);
     mentee.mentorId = null;
+    renderEmployeesList();
+  }
+
+  function assignEmployeeUpgrade(empId, upgradeId) {
+    var emp = getEmployee(empId);
+    var def = getEmployeeUpgradeDef(upgradeId);
+    if (!emp || !def) return;
+    if ((emp.upgrades || []).indexOf(upgradeId) >= 0) return;
+    if (!isEmployeeUpgradeUnlocked(upgradeId)) return;
+    (emp.upgrades = emp.upgrades || []).push(upgradeId);
     renderEmployeesList();
   }
 
@@ -491,6 +678,7 @@
     if (state.playerXP < needed || state.pendingLevelUp) return;
     state.playerXP -= needed;
     state.playerLevel += 1;
+    state.forceSyncNextSave = true;
     state.pendingLevelUp = true;
     showLevelUpModal();
   }
@@ -609,6 +797,10 @@
 
     if (state.activeEvent && state.activeEvent.productionMultiplier) total *= state.activeEvent.productionMultiplier;
     if (state.agencyEventChoice && state.agencyEventChoice.prod) total *= state.agencyEventChoice.prod;
+
+    var nowErr = Date.now();
+    var impactSum = (state.activeErrorImpacts || []).filter(function (a) { return a.until > nowErr; }).reduce(function (s, a) { return s + (a.percent || 0); }, 0);
+    if (impactSum > 0) total *= Math.max(0, 1 - impactSum / 100);
 
     const cafe = getBrandingState('cafe');
     const cafeDef = getBrandingDef('cafe');
@@ -1006,6 +1198,7 @@
         chapter: state.chapter,
         completedChapters: state.completedChapters,
         reputation: state.reputation,
+        unlockedEmployeeUpgrades: state.unlockedEmployeeUpgrades,
         prestigeBonuses: state.prestigeBonuses,
         purchasedPrestigeBonuses: state.purchasedPrestigeBonuses,
         agencyName: state.agencyName,
@@ -1019,11 +1212,22 @@
         employees: state.employees,
         nextErrorRollAt: state.nextErrorRollAt,
         lastContractRefreshAt: state.lastContractRefreshAt,
+        pendingErrors: state.pendingErrors,
+        activeErrorImpacts: state.activeErrorImpacts,
         themeColor: state.themeColor,
         save_version: SAVE_VERSION,
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
       state.lastSave = Date.now();
+      if (typeof window.devIdleSyncToServer === 'function') {
+        var now = Date.now();
+        var force = state.forceSyncNextSave === true;
+        if (force || now - lastSyncToServer >= SYNC_TO_SERVER_THROTTLE_MS) {
+          state.forceSyncNextSave = false;
+          lastSyncToServer = now;
+          window.devIdleSyncToServer(payload).catch(function () {});
+        }
+      }
     } catch (e) {
       console.warn('Save failed', e);
     }
@@ -1069,6 +1273,8 @@
       if (Array.isArray(data.completedChapters)) state.completedChapters = data.completedChapters;
       if (data.chapterBonuses) state.chapterBonuses = data.chapterBonuses;
       if (typeof data.reputation === 'number') state.reputation = data.reputation;
+      if (Array.isArray(data.unlockedEmployeeUpgrades)) state.unlockedEmployeeUpgrades = data.unlockedEmployeeUpgrades;
+      else state.unlockedEmployeeUpgrades = state.unlockedEmployeeUpgrades || [];
       if (Array.isArray(data.managers)) data.managers.forEach((s) => { const ms = getManagerState(s.id); if (ms && typeof s.quantity === 'number') ms.quantity = s.quantity; });
       if (Array.isArray(data.intlOffices)) data.intlOffices.forEach((s) => { const os = getIntlOfficeState(s.id); if (os && typeof s.quantity === 'number') os.quantity = s.quantity; });
       if (Array.isArray(data.training)) data.training.forEach((s) => { const ts = getTrainingState(s.id); if (ts && typeof s.quantity === 'number') ts.quantity = s.quantity; });
@@ -1093,6 +1299,10 @@
       if (typeof data.nextErrorRollAt === 'number') state.nextErrorRollAt = data.nextErrorRollAt;
       else state.nextErrorRollAt = Date.now() + ERROR_ROLL_INTERVAL_MS;
       if (typeof data.lastContractRefreshAt === 'number') state.lastContractRefreshAt = data.lastContractRefreshAt;
+      if (Array.isArray(data.pendingErrors)) state.pendingErrors = data.pendingErrors;
+      else state.pendingErrors = state.pendingErrors || [];
+      if (Array.isArray(data.activeErrorImpacts)) state.activeErrorImpacts = data.activeErrorImpacts.filter(function (a) { return a.until > Date.now(); });
+      else state.activeErrorImpacts = state.activeErrorImpacts || [];
       if (data.themeColor) state.themeColor = data.themeColor;
     } catch (e) {
       console.warn('Load failed', e);
@@ -1177,22 +1387,112 @@
     if (modal) modal.hidden = true;
   }
 
-  function showErrorModal(emp) {
+  function showErrorModal(emp, errorRecord) {
     const modal = document.getElementById('error-modal');
     if (!modal || !emp) return;
-    document.getElementById('error-modal-message').textContent = getRandomErrorMessage();
+    var rec = errorRecord || state.currentErrorRecord;
+    var msg = rec && rec.message ? rec.message : getRandomErrorMessage();
+    var impactDetail = rec && rec.impactDetail ? rec.impactDetail : '';
+    document.getElementById('error-modal-message').textContent = msg;
     document.getElementById('error-modal-name').textContent = emp.name + ' (' + (EMPLOYEE_TYPE_LABELS[emp.type] || emp.type) + ')';
+    var impactEl = document.getElementById('error-modal-impact');
+    if (impactEl) {
+      impactEl.textContent = impactDetail ? 'Impact : ' + impactDetail : '';
+      impactEl.hidden = !impactDetail;
+    }
     var iconEl = document.getElementById('error-modal-icon');
     if (iconEl) {
       iconEl.src = (typeof window.getIconUrl === 'function') ? window.getIconUrl('error', 48) : FALLBACK_ICON;
       iconEl.dataset.fallback = (typeof window.getFallbackIconPath === 'function') ? window.getFallbackIconPath() : FALLBACK_ICON;
     }
     modal.setAttribute('data-employee-id', emp.id);
+    state.currentErrorRecord = rec || null;
     modal.hidden = false;
   }
 
   function hideErrorModal() {
     const modal = document.getElementById('error-modal');
+    if (modal) modal.hidden = true;
+  }
+
+  function renderPendingErrorsBadge() {
+    var count = (state.pendingErrors || []).length;
+    var btn = document.getElementById('header-errors-btn');
+    var badge = document.getElementById('header-errors-badge');
+    var tabBadge = document.getElementById('tab-equipe-errors-badge');
+    if (btn) btn.hidden = count === 0;
+    if (badge) {
+      badge.hidden = count === 0;
+      badge.textContent = count > 99 ? '99+' : String(count);
+    }
+    if (tabBadge) {
+      tabBadge.hidden = count === 0;
+      tabBadge.textContent = count > 99 ? '99+' : String(count);
+    }
+  }
+
+  function openErrorModalForPending(record) {
+    var emp = getEmployee(record.employeeId);
+    if (!emp) return;
+    state.errorModalFromPending = true;
+    state.currentErrorRecord = record;
+    state.errorModalEmployeeId = emp.id;
+    showErrorModal(emp, record);
+  }
+
+  function renderSettingsPendingErrors() {
+    var list = document.getElementById('settings-pending-errors-list');
+    var emptyEl = document.getElementById('settings-pending-errors-empty');
+    var block = document.getElementById('settings-pending-errors-block');
+    if (!list) return;
+    list.innerHTML = '';
+    var pending = state.pendingErrors || [];
+    if (block) block.hidden = pending.length === 0;
+    if (emptyEl) emptyEl.hidden = pending.length > 0;
+    pending.forEach(function (rec) {
+      var emp = getEmployee(rec.employeeId);
+      var div = document.createElement('div');
+      div.className = 'settings-pending-error-item';
+      var name = rec.employeeName + ' (' + (EMPLOYEE_TYPE_LABELS[rec.employeeType] || rec.employeeType) + ')';
+      var detail = rec.impactDetail ? ' — ' + rec.impactDetail : '';
+      div.innerHTML =
+        '<div class="settings-pending-error-head">' +
+        '<span class="settings-pending-error-name">' + escapeHtml(name) + '</span>' +
+        '<span class="settings-pending-error-impact">' + escapeHtml(rec.impactDetail || '') + '</span>' +
+        '</div>' +
+        '<div class="settings-pending-error-actions">' +
+        (emp ? '<button type="button" class="tapstorm-btn tapstorm-btn-secondary btn-traiter-error" data-record-id="' + escapeHtml(rec.id) + '">Traiter</button>' : '') +
+        '<button type="button" class="tapstorm-btn tapstorm-btn-secondary btn-detail-error" data-record-id="' + escapeHtml(rec.id) + '">Détails</button>' +
+        '</div>';
+      list.appendChild(div);
+      if (emp) {
+        div.querySelector('.btn-traiter-error')?.addEventListener('click', function () {
+          openErrorModalForPending(rec);
+        });
+      }
+      div.querySelector('.btn-detail-error')?.addEventListener('click', function () {
+        openErrorDetailModal(rec);
+      });
+    });
+  }
+
+  function openErrorDetailModal(record) {
+    var modal = document.getElementById('error-detail-modal');
+    if (!modal) return;
+    document.getElementById('error-detail-message').textContent = record.message || '';
+    document.getElementById('error-detail-name').textContent = record.employeeName + ' (' + (EMPLOYEE_TYPE_LABELS[record.employeeType] || record.employeeType) + ')';
+    document.getElementById('error-detail-impact').textContent = record.impactDetail || record.impactName || '—';
+    var emp = getEmployee(record.employeeId);
+    var treatBtn = document.getElementById('error-detail-traiter');
+    if (treatBtn) {
+      treatBtn.hidden = !emp;
+      if (emp) treatBtn.onclick = function () { closeErrorDetailModal(); openErrorModalForPending(record); };
+    }
+    modal.hidden = false;
+  }
+
+  function closeErrorDetailModal() {
+    var modal = document.getElementById('error-detail-modal');
     if (modal) modal.hidden = true;
   }
 
@@ -1267,46 +1567,127 @@
     btn.classList.toggle('too-expensive', !affordable);
   }
 
-  function renderEmployeesList() {
-    const container = document.getElementById('employees-list');
+  function openSkillTreeModal() {
+    renderSkillTree();
+    var modal = document.getElementById('skill-tree-modal');
+    if (modal) modal.hidden = false;
+  }
+  function closeSkillTreeModal() {
+    var modal = document.getElementById('skill-tree-modal');
+    if (modal) modal.hidden = true;
+  }
+  function renderSkillTree() {
+    var container = document.getElementById('skill-tree-list');
     if (!container) return;
     container.innerHTML = '';
-    const mentorsWithSlots = (state.employees || []).filter((m) => (m.type === 'junior' || m.type === 'senior') && (m.mentorSlots || 0) > (m.menteesIds || []).length);
-    (state.employees || []).forEach((emp) => {
-      const row = document.createElement('div');
-      row.className = 'employee-row' + (emp.hasError ? ' has-error' : '');
-      const mentor = emp.mentorId ? getEmployee(emp.mentorId) : null;
-      const mentorLabel = mentor ? mentor.name : '—';
-      let assignHtml = '';
+    EMPLOYEE_UPGRADES.forEach(function (u) {
+      var unlocked = isEmployeeUpgradeUnlocked(u.id);
+      var canUnlock = canUnlockEmployeeUpgrade(u.id);
+      var reqLabel = u.requires ? (getEmployeeUpgradeDef(u.requires) ? 'Requiert: ' + getEmployeeUpgradeDef(u.requires).name : '') : '';
+      var card = document.createElement('div');
+      card.className = 'skill-tree-card tapstorm-card' + (unlocked ? ' skill-tree-card-unlocked' : '');
+      card.innerHTML =
+        '<div class="skill-tree-card-head">' +
+        '<span class="skill-tree-name">' + escapeHtml(u.name) + '</span>' +
+        (unlocked ? '<span class="skill-tree-badge">Débloqué</span>' : '<span class="skill-tree-cost">' + u.reputationCost + ' réputation</span>') +
+        '</div>' +
+        '<p class="skill-tree-desc">' + escapeHtml(u.desc) + '</p>' +
+        (reqLabel ? '<p class="skill-tree-requires">' + escapeHtml(reqLabel) + '</p>' : '') +
+        (unlocked ? '' : '<button type="button" class="tapstorm-btn tapstorm-btn-secondary btn-unlock-skill' + (canUnlock ? '' : ' too-expensive') + '" data-upgrade-id="' + escapeHtml(u.id) + '"' + (canUnlock ? '' : ' disabled') + '>Débloquer</button>');
+      container.appendChild(card);
+      if (!unlocked) {
+        card.querySelector('.btn-unlock-skill')?.addEventListener('click', function (e) {
+          e.stopPropagation();
+          var id = this.getAttribute('data-upgrade-id');
+          if (id) unlockEmployeeUpgrade(id);
+        });
+      }
+    });
+  }
+
+  function renderEmployeesList() {
+    var containerSeniors = document.getElementById('employees-list-seniors');
+    var containerTeam = document.getElementById('employees-list-team');
+    if (!containerSeniors || !containerTeam) return;
+    var expandedIds = [];
+    containerSeniors.querySelectorAll('.employee-row.expanded').forEach(function (r) { var id = r.getAttribute('data-employee-id'); if (id) expandedIds.push(id); });
+    containerTeam.querySelectorAll('.employee-row.expanded').forEach(function (r) { var id = r.getAttribute('data-employee-id'); if (id) expandedIds.push(id); });
+    containerSeniors.innerHTML = '';
+    containerTeam.innerHTML = '';
+    var mentorsWithSlots = (state.employees || []).filter(function (m) { return m.type === 'senior' && (m.mentorSlots || 0) > (m.menteesIds || []).length; });
+    var employees = state.employees || [];
+    var seniors = employees.filter(function (e) { return e.type === 'senior'; });
+    var team = employees.filter(function (e) { return e.type === 'junior' || e.type === 'stagiaire'; });
+    function appendEmployeeRow(container, emp) {
+      var now = Date.now();
+      var mentorPenaltySec = getMentorPenaltyRemainingSec(emp);
+      var hasMentorPenalty = mentorPenaltySec > 0;
+      var row = document.createElement('div');
+      row.setAttribute('data-employee-id', emp.id);
+      row.className = 'employee-row' + (emp.hasError ? ' has-error' : '') + (hasMentorPenalty ? ' has-mentor-penalty' : '');
+      var mentor = emp.mentorId ? getEmployee(emp.mentorId) : null;
+      var mentorLabel = mentor ? mentor.name : '—';
+      var assignHtml = '';
       if (emp.type === 'stagiaire' || emp.type === 'junior') {
         if (mentorsWithSlots.length > 0 && !emp.mentorId) {
-          const availableMentors = mentorsWithSlots.filter((m) => m.id !== emp.id);
-          assignHtml = availableMentors.length > 0 ? '<select class="assign-mentor-select" data-mentee-id="' + emp.id + '"><option value="">Assigner à...</option>' +
-            availableMentors.map((m) => '<option value="' + m.id + '">' + escapeHtml(m.name) + ' (' + (EMPLOYEE_TYPE_LABELS[m.type] || m.type) + ')</option>').join('') + '</select>' : '';
+          var availableMentors = mentorsWithSlots.filter(function (m) { return m.id !== emp.id; });
+          assignHtml = availableMentors.length > 0 ? '<select class="assign-mentor-select" data-mentee-id="' + emp.id + '"><option value="">Assigner à un senior...</option>' +
+            availableMentors.map(function (m) { return '<option value="' + m.id + '">' + escapeHtml(m.name) + '</option>'; }).join('') + '</select>' : '';
         } else if (emp.mentorId) {
           assignHtml = '<button type="button" class="btn-unassign" data-id="' + emp.id + '">Retirer du mentor</button>';
         }
       }
+      var statusHtml = emp.hasError ? '<span class="employee-status error">Erreur</span>' : hasMentorPenalty ? '<span class="employee-status mentor-penalty">Pénalité ' + mentorPenaltySec + ' s</span>' : '<span class="employee-status ok">OK</span>';
+      var causedByEmp = (emp.mentorPenaltyCausedBy && hasMentorPenalty) ? getEmployee(emp.mentorPenaltyCausedBy) : null;
+      var causedByName = causedByEmp ? causedByEmp.name + ' (' + (EMPLOYEE_TYPE_LABELS[causedByEmp.type] || causedByEmp.type) + ')' : '';
+      var effectiveErr = (getEmployeeEffectiveErrorChance(emp) * 100).toFixed(1);
+      var prodBonusPct = getEmployeeProdBonusPercent(emp);
+      var upgradesHave = (emp.upgrades || []).map(function (uid) { var d = getEmployeeUpgradeDef(uid); return d ? d.name : null; }).filter(Boolean);
+      var upgradesBlock = '<div class="employee-detail-line"><span class="employee-detail-label">Err (effective):</span> ' + effectiveErr + '%' + (prodBonusPct !== 0 ? ' · Prod: ' + (prodBonusPct > 0 ? '+' : '') + prodBonusPct + '%' : '') + '</div>' +
+        (upgradesHave.length > 0 ? '<div class="employee-detail-line employee-detail-upgrades"><span class="employee-detail-label">Améliorations:</span> ' + upgradesHave.map(function (n) { return escapeHtml(n); }).join(', ') + '</div>' : '');
+      var availableUpgrades = EMPLOYEE_UPGRADES.filter(function (u) {
+        return (emp.upgrades || []).indexOf(u.id) < 0 && isEmployeeUpgradeUnlocked(u.id);
+      });
+      var buyUpgradesHtml = availableUpgrades.length > 0 ? '<div class="employee-detail-line employee-detail-buy-upgrades"><span class="employee-detail-label">Attribuer une compétence:</span><div class="employee-upgrade-buttons">' +
+        availableUpgrades.map(function (u) {
+          return '<button type="button" class="tapstorm-btn tapstorm-btn-secondary btn-employee-upgrade" data-emp-id="' + escapeHtml(emp.id) + '" data-upgrade-id="' + escapeHtml(u.id) + '" title="' + escapeHtml(u.desc) + '">' + escapeHtml(u.name) + ' — Attribuer</button>';
+        }).join('') + '</div></div>' : '';
+      var mentorPenaltyDetail = hasMentorPenalty ? '<div class="employee-detail-line employee-detail-mentor-penalty"><span class="employee-detail-label">Pénalité:</span> ' + (causedByName ? escapeHtml(causedByName) + ' a fait une erreur pardonnée — ' : 'Un mentoré a été pardonné — ') + mentorPenaltySec + ' s restantes</div>' : '';
+      var menteesList = (emp.menteesIds || []).map(function (mid) {
+        var m = getEmployee(mid);
+        if (!m) return null;
+        var label = escapeHtml(m.name) + ' (' + (EMPLOYEE_TYPE_LABELS[m.type] || m.type) + ')';
+        if (hasMentorPenalty && mid === emp.mentorPenaltyCausedBy) label += ' <span class="mentee-caused-penalty">← a fait l\'erreur pardonnée</span>';
+        return label;
+      }).filter(Boolean);
+      var menteesBlock = menteesList.length > 0 ? '<div class="employee-detail-line employee-detail-mentees"><span class="employee-detail-label">Mentorés:</span> <ul class="mentees-list">' + menteesList.map(function (l) { return '<li>' + l + '</li>'; }).join('') + '</ul></div>' : '';
       row.innerHTML =
         '<div class="employee-row-head" role="button" tabindex="0" aria-expanded="false">' +
         '<span class="employee-name">' + escapeHtml(emp.name) + '</span>' +
         '<span class="employee-type-badge">' + (EMPLOYEE_TYPE_LABELS[emp.type] || emp.type) + '</span>' +
         '<span class="employee-prod">' + emp.prodPerSec + ' créd/s</span>' +
-        (emp.hasError ? '<span class="employee-status error">Erreur</span>' : '<span class="employee-status ok">OK</span>') +
+        statusHtml +
         '<span class="employee-toggle" aria-hidden="true">▼</span>' +
         '</div>' +
         '<div class="employee-row-details">' +
-        '<div class="employee-detail-line"><span class="employee-detail-label">Trait:</span> ' + escapeHtml(emp.trait || '—') + ' · ' + (emp.errorChance * 100).toFixed(1) + '% err</div>' +
+        '<div class="employee-detail-line"><span class="employee-detail-label">Trait:</span> ' + escapeHtml(emp.trait || '—') + ' · base err ' + (emp.errorChance * 100).toFixed(1) + '%</div>' +
+        upgradesBlock +
+        buyUpgradesHtml +
         (emp.menteesIds && emp.menteesIds.length > 0 ? '<div class="employee-detail-line"><span class="employee-detail-label">Équipe:</span> ' + emp.menteesIds.length + '/' + (emp.mentorSlots || 0) + '</div>' : '') +
+        menteesBlock +
+        mentorPenaltyDetail +
         '<div class="employee-detail-line"><span class="employee-detail-label">Mentor:</span> ' + escapeHtml(mentorLabel) + '</div>' +
         (assignHtml ? '<div class="employee-detail-actions">' + assignHtml + '</div>' : '') +
         '<div class="employee-detail-actions"><button type="button" class="btn-licencier" data-id="' + emp.id + '">Licencier</button></div>' +
         '</div>';
       container.appendChild(row);
-      const head = row.querySelector('.employee-row-head');
-      const details = row.querySelector('.employee-row-details');
-      const toggleExpand = function (e) {
-        if (e.target.closest('.btn-licencier, .btn-unassign, .assign-mentor-select')) return;
+      var head = row.querySelector('.employee-row-head');
+      if (expandedIds.indexOf(emp.id) >= 0) {
+        row.classList.add('expanded');
+        head.setAttribute('aria-expanded', 'true');
+      }
+      var toggleExpand = function (e) {
+        if (e.target.closest('.btn-licencier, .btn-unassign, .assign-mentor-select, .btn-employee-upgrade')) return;
         row.classList.toggle('expanded');
         head.setAttribute('aria-expanded', row.classList.contains('expanded'));
       };
@@ -1316,11 +1697,21 @@
       row.querySelector('.btn-unassign')?.addEventListener('click', function (e) { e.stopPropagation(); unassignMentee(this.getAttribute('data-id')); });
       row.querySelector('.assign-mentor-select')?.addEventListener('change', function (e) {
         e.stopPropagation();
-        const mentorId = this.value;
-        const menteeId = this.getAttribute('data-mentee-id');
+        var mentorId = this.value;
+        var menteeId = this.getAttribute('data-mentee-id');
         if (mentorId && menteeId) assignMentee(mentorId, menteeId);
       });
-    });
+      row.querySelectorAll('.btn-employee-upgrade').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          var empId = this.getAttribute('data-emp-id');
+          var upgradeId = this.getAttribute('data-upgrade-id');
+          if (empId && upgradeId) assignEmployeeUpgrade(empId, upgradeId);
+        });
+      });
+    }
+    seniors.forEach(function (emp) { appendEmployeeRow(containerSeniors, emp); });
+    team.forEach(function (emp) { appendEmployeeRow(containerTeam, emp); });
   }
 
   function renderCredits() {
@@ -1783,6 +2174,7 @@
     renderChapter();
     renderQuests();
     renderRecruitmentContracts();
+    renderSkillTree();
     renderEmployeesList();
     renderUpgrades();
     renderOffices();
@@ -1797,6 +2189,8 @@
     renderPrestige();
     renderSettingsAllQuests();
     renderSettingsCompletedQuests();
+    renderPendingErrorsBadge();
+    renderSettingsPendingErrors();
   }
 
   function gameLoop(now) {
@@ -1819,16 +2213,21 @@
       if (emp.hasError && nowMs >= emp.errorUntil) {
         emp.hasError = false;
         emp.errorUntil = 0;
-        if (state.errorModalEmployeeId === emp.id) {
+        if (!state.errorModalFromPending && state.errorModalEmployeeId === emp.id) {
           state.errorModalEmployeeId = null;
           hideErrorModal();
         }
       }
+      if ((emp.mentorPenaltyUntil || 0) > 0 && nowMs >= emp.mentorPenaltyUntil) {
+        emp.mentorPenaltyUntil = 0;
+        emp.mentorPenaltyCausedBy = null;
+      }
     });
-    if (state.errorModalEmployeeId && !getEmployee(state.errorModalEmployeeId)?.hasError) {
+    if (!state.errorModalFromPending && state.errorModalEmployeeId && !getEmployee(state.errorModalEmployeeId)?.hasError) {
       state.errorModalEmployeeId = null;
       hideErrorModal();
     }
+    state.activeErrorImpacts = (state.activeErrorImpacts || []).filter(function (a) { return a.until > nowMs; });
     if (nowMs >= state.nextErrorRollAt && (state.employees || []).length > 0) {
       state.nextErrorRollAt = nowMs + ERROR_ROLL_INTERVAL_MS;
       rollEmployeeErrors();
@@ -1847,6 +2246,11 @@
     renderContrats();
     updateUpgradesAffordability();
     renderPrestige();
+    var hasMentorPenalty = (state.employees || []).some(function (e) { return (e.mentorPenaltyUntil || 0) > nowMs; });
+    if (hasMentorPenalty && nowMs - lastMentorPenaltyRender > 1000) {
+      lastMentorPenaltyRender = nowMs;
+      renderEmployeesList();
+    }
 
     if (Date.now() - state.lastSave > 5000) save();
     } catch (err) {
@@ -1938,7 +2342,17 @@
       document.getElementById('chapter-complete-ok')?.click();
     });
     document.getElementById('error-modal-close')?.addEventListener('click', function () {
-      document.getElementById('error-modal-pardonner')?.click();
+      var rec = state.currentErrorRecord;
+      if (rec && !(state.pendingErrors || []).some(function (e) { return e.employeeId === rec.employeeId; })) {
+        (state.pendingErrors = state.pendingErrors || []).push(rec);
+      }
+      state.currentErrorRecord = null;
+      state.errorModalEmployeeId = null;
+      state.errorModalFromPending = false;
+      hideErrorModal();
+      renderPendingErrorsBadge();
+      renderSettingsPendingErrors();
+      renderEmployeesList();
     });
     document.getElementById('error-modal-pardonner')?.addEventListener('click', function () {
       const id = document.getElementById('error-modal')?.getAttribute('data-employee-id');
@@ -1951,6 +2365,16 @@
     document.getElementById('recruitment-refresh-btn')?.addEventListener('click', refreshRecruitmentContracts);
     document.getElementById('btn-show-all-quests')?.addEventListener('click', openAllQuestsModal);
     document.getElementById('all-quests-modal-close')?.addEventListener('click', closeAllQuestsModal);
+    document.getElementById('header-errors-btn')?.addEventListener('click', function () {
+      var tab = document.querySelector('.tab-btn[data-tab="equipe"]');
+      if (tab) tab.click();
+    });
+    document.getElementById('error-detail-modal-close')?.addEventListener('click', closeErrorDetailModal);
+    document.getElementById('btn-open-skill-tree')?.addEventListener('click', openSkillTreeModal);
+    document.getElementById('skill-tree-modal-close')?.addEventListener('click', closeSkillTreeModal);
+    document.getElementById('skill-tree-modal')?.addEventListener('click', function (e) {
+      if (e.target && e.target.id === 'skill-tree-modal') closeSkillTreeModal();
+    });
 
     document.getElementById('btn-deconnexion')?.addEventListener('click', function () {
       try {
@@ -1984,7 +2408,10 @@
 
     setInterval(() => gameLoop(performance.now()), TICK_MS);
     setInterval(renderCredits, 150);
-    window.addEventListener('beforeunload', save);
+    window.addEventListener('beforeunload', function () {
+      state.forceSyncNextSave = true;
+      save();
+    });
   }
 
   function init() {
