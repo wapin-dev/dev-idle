@@ -10,7 +10,7 @@ import { loadProgress, saveProgress } from './storage';
 import type { UserProgress } from './types';
 
 const SAVE_KEY = 'agence-dev-idle-save-v4';
-const SYNC_THROTTLE_MS = 2 * 60 * 1000; // 2 min entre chaque envoi serveur
+// const SYNC_THROTTLE_MS = 2 * 60 * 1000; // 2 min entre chaque envoi serveur
 
 function init(): void {
   document.body.classList.add('game-active');
