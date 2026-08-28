@@ -25,6 +25,11 @@
   // Ralentit légèrement la production passive globale pour un rythme plus confortable
   const GLOBAL_PRODUCTION_SCALE = 0.15;
 
+  // Production hors-ligne : rendement réduit, plafonné, et ignoré sous une minute d'absence
+  const OFFLINE_RATE = 0.5;
+  const OFFLINE_MAX_MS = 8 * 60 * 60 * 1000;
+  const OFFLINE_MIN_MS = 60 * 1000;
+
   const EMPLOYEE_TYPE_LABELS = { stagiaire: 'Stagiaire', junior: 'Dev junior', senior: 'Dev senior' };
   const EMPLOYEE_TYPE_ICONS = { stagiaire: 'student', junior: 'developer', senior: 'conference-call' };
   const FALLBACK_ICON = '/assets/icons/placeholder.svg';
@@ -70,7 +75,7 @@
   const ERROR_IMPACT_TYPES = [
     { id: 'production', name: 'Production', desc: 'Réduit la production de l\'agence pendant %d s.', penaltyPercent: 10, durationMs: 30000 },
     { id: 'profit', name: 'Profit', desc: 'A causé une perte de crédits (déjà déduite).', creditPercent: 2 },
-    { id: 'reputation', name: 'Réputation', desc: 'A nui à la réputation client.', reputationPenalty: 1 },
+    { id: 'reputation', name: 'Réputation', desc: 'A nui à la réputation client : production réduite pendant %d s.', penaltyPercent: 20, durationMs: 60000 },
     { id: 'delivery', name: 'Livraison', desc: 'Retard sur une livraison : production réduite pendant %d s.', penaltyPercent: 15, durationMs: 45000 },
   ];
   const EMPLOYEE_TYPE_COST_BASE = { stagiaire: 20, junior: 80, senior: 200 };
@@ -307,6 +312,7 @@
     playerLevel: 1,
     playerXP: 0,
     pendingLevelUp: false,
+    levelUpChoices: null,
     levelBonuses: {},
     lastSave: 0,
     nextEventAt: 0,
@@ -545,11 +551,6 @@
       record.creditPenalty = penalty;
       record.impactDetail = 'Perte de ' + formatNumber(penalty) + ' crédits';
     }
-    if (impactDef.reputationPenalty) {
-      state.reputation = Math.max(0, (state.reputation || 0) - impactDef.reputationPenalty);
-      record.reputationPenalty = impactDef.reputationPenalty;
-      record.impactDetail = '-1 réputation';
-    }
     return record;
   }
 
@@ -680,7 +681,10 @@
     state.playerLevel += 1;
     state.forceSyncNextSave = true;
     state.pendingLevelUp = true;
-    showLevelUpModal();
+    // Tant que le rapport hors-ligne est ouvert, on garde le level-up en file :
+    // hideOfflineModal l'ouvrira. pendingLevelUp reste vrai entre-temps.
+    if (!isOfflineModalOpen()) showLevelUpModal();
+    save();
   }
 
   function applyLevelBonus(bonusId) {
@@ -691,7 +695,10 @@
       state.levelBonuses[key] = (state.levelBonuses[key] || 0) + val;
     });
     state.pendingLevelUp = false;
+    state.levelUpChoices = null;
     hideLevelUpModal();
+    state.forceSyncNextSave = true;
+    save();
     renderAll();
   }
 
@@ -1150,6 +1157,10 @@
     generateRecruitmentContracts();
     endEvent();
     scheduleNextEvent();
+    // Le prestige remet playerLevel à 1 : sans push immédiat, chooseBestProgress
+    // ferait gagner le serveur (niveau supérieur) et annulerait le prestige entier.
+    state.forceSyncNextSave = true;
+    save();
     renderAll();
   }
 
@@ -1165,8 +1176,10 @@
   }
 
   function formatDuration(seconds) {
-    const m = Math.floor(seconds / 60);
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
     const s = Math.floor(seconds % 60);
+    if (h > 0) return h + ' h ' + m + ' min';
     return (m > 0 ? m + ' min ' : '') + s + ' s';
   }
 
@@ -1178,11 +1191,14 @@
 
   function save() {
     try {
+      const savedAt = Date.now();
       const payload = {
         credits: state.credits,
         clickPower: state.clickPower,
         playerLevel: state.playerLevel,
         playerXP: state.playerXP,
+        pendingLevelUp: state.pendingLevelUp,
+        levelUpChoices: state.levelUpChoices,
         levelBonuses: state.levelBonuses,
         upgrades: state.upgrades,
         offices: state.offices,
@@ -1215,12 +1231,13 @@
         pendingErrors: state.pendingErrors,
         activeErrorImpacts: state.activeErrorImpacts,
         themeColor: state.themeColor,
+        lastSave: savedAt,
         save_version: SAVE_VERSION,
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
-      state.lastSave = Date.now();
+      state.lastSave = savedAt;
       if (typeof window.devIdleSyncToServer === 'function') {
-        var now = Date.now();
+        var now = savedAt;
         var force = state.forceSyncNextSave === true;
         if (force || now - lastSyncToServer >= SYNC_TO_SERVER_THROTTLE_MS) {
           state.forceSyncNextSave = false;
@@ -1242,6 +1259,8 @@
       if (typeof data.clickPower === 'number') state.clickPower = data.clickPower;
       if (typeof data.playerLevel === 'number') state.playerLevel = data.playerLevel;
       if (typeof data.playerXP === 'number') state.playerXP = data.playerXP;
+      if (typeof data.pendingLevelUp === 'boolean') state.pendingLevelUp = data.pendingLevelUp;
+      if (Array.isArray(data.levelUpChoices)) state.levelUpChoices = data.levelUpChoices;
       if (data.levelBonuses) state.levelBonuses = data.levelBonuses;
       if (data.prestigeBonuses) state.prestigeBonuses = data.prestigeBonuses;
       if (Array.isArray(data.upgrades)) {
@@ -1303,7 +1322,14 @@
       else state.pendingErrors = state.pendingErrors || [];
       if (Array.isArray(data.activeErrorImpacts)) state.activeErrorImpacts = data.activeErrorImpacts.filter(function (a) { return a.until > Date.now(); });
       else state.activeErrorImpacts = state.activeErrorImpacts || [];
+      // Même normalisation qu'à la saisie (écran de départ et réglages) : trim + 40 car.
+      if (typeof data.agencyName === 'string' && data.agencyName.trim()) {
+        state.agencyName = data.agencyName.trim().slice(0, 40);
+      }
       if (data.themeColor) state.themeColor = data.themeColor;
+      // Borné à maintenant : un lastSave venu d'un appareil à l'horloge en avance
+      // rendrait (Date.now() - lastSave) négatif et gèlerait l'autosave de la boucle.
+      if (typeof data.lastSave === 'number') state.lastSave = Math.min(data.lastSave, Date.now());
     } catch (e) {
       console.warn('Load failed', e);
     }
@@ -1320,7 +1346,13 @@
     levelUpSelectedId = null;
     if (validateBtn) validateBtn.disabled = true;
     levelEl.textContent = state.playerLevel;
-    const pool = [...LEVEL_BONUSES].sort(() => Math.random() - 0.5).slice(0, 3);
+    let pool = (state.levelUpChoices || [])
+      .map((id) => LEVEL_BONUSES.find((b) => b.id === id))
+      .filter(Boolean);
+    if (pool.length < 3) {
+      pool = [...LEVEL_BONUSES].sort(() => Math.random() - 0.5).slice(0, 3);
+      state.levelUpChoices = pool.map((b) => b.id);
+    }
     choicesEl.innerHTML = '';
     pool.forEach((b) => {
       const btn = document.createElement('button');
@@ -1749,10 +1781,13 @@
 
   function renderReputation() {
     const stat = document.getElementById('reputation-stat');
-    const el = document.getElementById('reputation');
+    if (!stat) return;
     if (state.reputation > 0) {
-      if (stat) stat.hidden = false;
-      if (el) el.textContent = formatNumber(state.reputation);
+      stat.hidden = false;
+      stat.textContent = formatNumber(state.reputation);
+    } else {
+      stat.hidden = true;
+      stat.textContent = '0';
     }
   }
 
@@ -2193,6 +2228,73 @@
     renderSettingsPendingErrors();
   }
 
+  /**
+   * Crédite la production accumulée pendant l'absence du joueur, à partir du
+   * lastSave de la sauvegarde. Volontairement sans XP : accorder de l'XP ici
+   * enchaînerait des montées de niveau et leurs modales dès le démarrage.
+   * Retourne un rapport à afficher, ou null si rien n'est dû.
+   */
+  function grantOfflineEarnings() {
+    const last = typeof state.lastSave === 'number' ? state.lastSave : 0;
+    if (!last) return null;
+    const now = Date.now();
+    const elapsed = now - last;
+    if (elapsed < OFFLINE_MIN_MS) return null;
+
+    // Purge ce qui a expiré pendant l'absence, sinon la prod serait sous-estimée
+    (state.employees || []).forEach(function (emp) {
+      if (emp.hasError && now >= (emp.errorUntil || 0)) {
+        emp.hasError = false;
+        emp.errorUntil = 0;
+      }
+      if ((emp.mentorPenaltyUntil || 0) > 0 && now >= emp.mentorPenaltyUntil) {
+        emp.mentorPenaltyUntil = 0;
+        emp.mentorPenaltyCausedBy = null;
+      }
+    });
+    state.activeErrorImpacts = (state.activeErrorImpacts || []).filter(function (a) { return a.until > now; });
+
+    const prod = getProductionPerSecond();
+    if (!(prod > 0)) return null;
+    const creditedMs = Math.min(elapsed, OFFLINE_MAX_MS);
+    const gain = Math.floor(prod * (creditedMs / 1000) * OFFLINE_RATE);
+    if (gain <= 0) return null;
+
+    state.credits = (state.credits || 0) + gain;
+    if (state.credits > state.bestRunCredits) state.bestRunCredits = state.credits;
+    // Sauvegarde immédiate : un crash avant le prochain autosave recréditerait le gain
+    save();
+    return { gain: gain, elapsedMs: elapsed, capped: elapsed > OFFLINE_MAX_MS };
+  }
+
+  function showOfflineModal(report) {
+    const modal = document.getElementById('offline-modal');
+    if (!modal || !report) return;
+    const amountEl = document.getElementById('offline-amount');
+    const detailEl = document.getElementById('offline-detail');
+    if (amountEl) amountEl.textContent = '+' + formatNumber(report.gain) + ' crédits';
+    if (detailEl) {
+      let txt = 'Absence de ' + formatDuration(report.elapsedMs / 1000) + ' — ton agence a tourné à ' + Math.round(OFFLINE_RATE * 100) + ' % de son rendement';
+      if (report.capped) txt += ', plafonné à ' + Math.round(OFFLINE_MAX_MS / 3600000) + ' h';
+      detailEl.textContent = txt + '.';
+    }
+    modal.hidden = false;
+  }
+
+  function isOfflineModalOpen() {
+    const modal = document.getElementById('offline-modal');
+    return !!modal && modal.hidden === false;
+  }
+
+  function hideOfflineModal() {
+    const modal = document.getElementById('offline-modal');
+    if (modal) modal.hidden = true;
+    // Ouverture différée d'un tick : ouvrir la modale de niveau en plein clic de
+    // fermeture ferait retomber le mouseup sur le bonus situé sous le curseur,
+    // qui se retrouverait sélectionné sans que le joueur l'ait choisi.
+    if (state.pendingLevelUp) setTimeout(showLevelUpModal, 0);
+  }
+
   function gameLoop(now) {
     try {
     const dt = Math.min((now - lastTick) / 1000, 1);
@@ -2324,6 +2426,7 @@
 
     initTabs();
     sanitizeEmployeesMentorship();
+    const offlineReport = grantOfflineEarnings();
     renderAll();
     renderCredits();
 
@@ -2338,6 +2441,11 @@
         levelUpSelectedId = null;
       }
     });
+    document.getElementById('offline-modal-close')?.addEventListener('click', hideOfflineModal);
+    document.getElementById('offline-ok')?.addEventListener('click', hideOfflineModal);
+    // Une seule modale à la fois : le level-up en attente s'ouvre à la fermeture du rapport hors-ligne
+    if (offlineReport) showOfflineModal(offlineReport);
+    else if (state.pendingLevelUp) showLevelUpModal();
     document.getElementById('chapter-complete-modal-close')?.addEventListener('click', function () {
       document.getElementById('chapter-complete-ok')?.click();
     });

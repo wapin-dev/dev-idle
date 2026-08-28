@@ -798,6 +798,17 @@ body.game-active .modal.modal-popup .modal-close:hover {
   background: #b91c1c;
   transform: scale(1.05);
 }
+body.game-active #game-screen .offline-amount {
+  font-size: 1.6rem;
+  font-weight: 800;
+  text-align: center;
+  margin: 4px 0 10px;
+  background: var(--cta-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
 body.game-active .modal.modal-popup .modal-title {
   text-align: center;
   text-transform: uppercase;

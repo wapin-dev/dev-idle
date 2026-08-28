@@ -28,10 +28,17 @@ export async function saveProgress(
   userId: string,
   progress: UserProgress
 ): Promise<boolean> {
+  // On conserve le lastSave produit par la sauvegarde locale : il départage local et
+  // serveur à niveau égal au démarrage (voir chooseBestProgress dans main.ts, où
+  // playerLevel prime). L'écraser ici rendrait le serveur toujours « plus récent ».
+  const payload = {
+    ...progress,
+    lastSave: typeof progress.lastSave === 'number' ? progress.lastSave : Date.now(),
+  };
   const { error } = await supabase
     .from(TABLE)
     .upsert(
-      { id: userId, progress: { ...progress, lastSave: Date.now() }, updated_at: new Date().toISOString() },
+      { id: userId, progress: payload, updated_at: new Date().toISOString() },
       { onConflict: 'id' }
     );
 
