@@ -21,25 +21,6 @@
 </head>
 <body class="game-active tapstorm-theme">
   <div class="app-wrapper">
-    <!-- Écran Login (désactivé pour l'instant : on affiche le jeu directement) -->
-    <section id="login-screen" class="screen login-screen">
-      <div class="login-card">
-        <h1>DevIdle Agency</h1>
-        <p class="tagline">Agence AFK – Idle Dev Game</p>
-        <form id="login-form" class="login-form">
-          <label for="login-email">Email</label>
-          <input type="email" id="login-email" name="email" placeholder="toi@exemple.fr" required autocomplete="email">
-          <label for="login-password">Mot de passe</label>
-          <input type="password" id="login-password" name="password" placeholder="••••••••" required autocomplete="current-password">
-          <p id="login-error" class="login-error" hidden></p>
-          <div class="login-actions">
-            <button type="submit" id="btn-login" class="btn btn-primary">Se connecter</button>
-            <button type="button" id="btn-signup" class="btn btn-secondary">S'inscrire</button>
-          </div>
-        </form>
-      </div>
-    </section>
-
     <!-- Écran : Choisir le nom de l'agence (première connexion / nouvelle partie) -->
     <section id="agency-name-screen" class="screen agency-name-screen" hidden>
       <div class="agency-name-card">
@@ -240,13 +221,13 @@
             <div id="settings-completed-quests-list" class="settings-completed-quests-list"></div>
             <p class="settings-hint" id="settings-completed-quests-empty">Aucun objectif accompli pour l’instant.</p>
           </div>
-          <h2 class="panel-title panel-title-spaced">Compte</h2>
+          <h2 class="panel-title panel-title-spaced">Partie</h2>
           <div class="settings-block tapstorm-card">
-            <button type="button" id="btn-deconnexion" class="tapstorm-btn tapstorm-btn-danger">
-              <img class="game-icon btn-deconnexion-icon" data-icon="logout" src="/assets/icons/placeholder.svg" alt="" width="20" height="20" data-fallback="/assets/icons/placeholder.svg">
-              Déconnexion
+            <p class="settings-hint">La partie est sauvegardée sur cet appareil uniquement. Aucun compte, aucune donnée envoyée.</p>
+            <button type="button" id="btn-reset-partie" class="tapstorm-btn tapstorm-btn-danger">
+              Réinitialiser la partie
             </button>
-            <p class="settings-hint">Réinitialise la partie locale et recharge l’app.</p>
+            <p class="settings-hint">Efface définitivement ta progression. Une confirmation est demandée.</p>
           </div>
         </section>
       </main>
@@ -336,6 +317,16 @@
           <p id="offline-amount" class="offline-amount"></p>
           <p id="offline-detail" class="tab-desc"></p>
           <button type="button" class="levelup-choice" id="offline-ok">Encaisser</button>
+        </div>
+      </div>
+
+      <div class="modal-overlay" id="reset-modal" hidden>
+        <div class="modal modal-popup">
+          <button type="button" class="modal-close" id="reset-modal-close" aria-label="Fermer">&times;</button>
+          <h3 class="modal-title">Réinitialiser la partie ?</h3>
+          <p class="tab-desc">Ta progression sera définitivement effacée : crédits, niveau, objectifs, achats. Cette action est irréversible.</p>
+          <button type="button" class="tapstorm-btn tapstorm-btn-danger" id="reset-confirm">Oui, tout effacer</button>
+          <button type="button" class="tapstorm-btn tapstorm-btn-secondary" id="reset-cancel">Annuler</button>
         </div>
       </div>
     </section>

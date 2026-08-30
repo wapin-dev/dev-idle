@@ -3,9 +3,12 @@
 
   const SAVE_KEY = 'agence-dev-idle-save-v4';
   const SAVE_VERSION = 1;
-  const SYNC_TO_SERVER_THROTTLE_MS = 2 * 60 * 1000;
-  var lastSyncToServer = 0;
   const TICK_MS = 100;
+  // La boucle tourne à 100 ms pour la production, mais l'interface n'a pas besoin
+  // de suivre cette cadence : les listes et les boutons sont rafraîchis 4 fois par
+  // seconde, la logique périodique (quêtes, chapitres, tirages) 2 fois par seconde.
+  const UI_REFRESH_MS = 250;
+  const LOGIC_REFRESH_MS = 500;
   const EVENT_MIN_INTERVAL_MS = 60 * 1000;
   const EVENT_MAX_INTERVAL_MS = 3 * 60 * 1000;
   const XP_PER_CLICK = 1;
@@ -349,12 +352,20 @@
     activeErrorImpacts: [],
     currentErrorRecord: null,
     errorModalFromPending: false,
-    forceSyncNextSave: false,
     lastContractRefreshAt: 0,
   };
 
   let lastTick = 0;
   var lastMentorPenaltyRender = 0;
+  var lastUiRefresh = 0;
+  var lastLogicRefresh = 0;
+  var activeTab = 'accueil';
+  // Dernières valeurs réellement écrites dans le DOM. La boucle repeignait dix
+  // fois par seconde des textes identiques ; on ne touche plus au DOM que quand
+  // la valeur affichée change.
+  var rendered = {};
+  function resetRenderCache() { rendered = {}; }
+  function isTabActive(name) { return activeTab === name; }
 
   function randomId() {
     return 'id_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9);
@@ -679,7 +690,6 @@
     if (state.playerXP < needed || state.pendingLevelUp) return;
     state.playerXP -= needed;
     state.playerLevel += 1;
-    state.forceSyncNextSave = true;
     state.pendingLevelUp = true;
     // Tant que le rapport hors-ligne est ouvert, on garde le level-up en file :
     // hideOfflineModal l'ouvrira. pendingLevelUp reste vrai entre-temps.
@@ -697,7 +707,6 @@
     state.pendingLevelUp = false;
     state.levelUpChoices = null;
     hideLevelUpModal();
-    state.forceSyncNextSave = true;
     save();
     renderAll();
   }
@@ -1043,10 +1052,13 @@
     hideAgencyEventModal();
   }
 
-  function maybeAgencyEvent() {
+  function maybeAgencyEvent(elapsedMs) {
     if (state.agencyEventChoice && state.agencyEventEndsAt > Date.now()) return;
     if (state.playerLevel < 15) return;
-    if (Math.random() > 0.002) return;
+    // Tirage exprimé pour 100 ms (la cadence historique), afin que la fréquence
+    // des événements ne change pas quand la boucle appelle moins souvent.
+    const chance = 0.002 * (Math.max(0, Number(elapsedMs) || 0) / 100);
+    if (Math.random() > chance) return;
     const ev = AGENCY_EVENTS[Math.floor(Math.random() * AGENCY_EVENTS.length)];
     showAgencyEventModal(ev);
   }
@@ -1117,13 +1129,18 @@
   }
 
   function checkQuests() {
+    let completed = false;
     QUEST_DEFS.forEach((q) => {
       if (state.completedQuests.includes(q.id)) return;
       if (q.target()) {
         state.completedQuests.push(q.id);
+        completed = true;
         if (q.reward && q.reward.xp) addXP(q.reward.xp);
       }
     });
+    // La liste n'est plus reconstruite à chaque tick : il faut la redessiner au
+    // moment où elle change, sinon l'onglet ouvert reste sur l'ancien affichage.
+    if (completed && isTabActive('accueil')) renderQuests();
   }
 
   function doPrestige() {
@@ -1159,7 +1176,6 @@
     scheduleNextEvent();
     // Le prestige remet playerLevel à 1 : sans push immédiat, chooseBestProgress
     // ferait gagner le serveur (niveau supérieur) et annulerait le prestige entier.
-    state.forceSyncNextSave = true;
     save();
     renderAll();
   }
@@ -1236,19 +1252,14 @@
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
       state.lastSave = savedAt;
-      if (typeof window.devIdleSyncToServer === 'function') {
-        var now = savedAt;
-        var force = state.forceSyncNextSave === true;
-        if (force || now - lastSyncToServer >= SYNC_TO_SERVER_THROTTLE_MS) {
-          state.forceSyncNextSave = false;
-          lastSyncToServer = now;
-          window.devIdleSyncToServer(payload).catch(function () {});
-        }
-      }
     } catch (e) {
       console.warn('Save failed', e);
     }
   }
+
+  // Détachable : la réinitialisation de la partie doit pouvoir empêcher cette
+  // dernière sauvegarde, sinon elle réécrit la partie qu'on vient d'effacer.
+  function saveOnUnload() { save(); }
 
   function load() {
     try {
@@ -1592,9 +1603,13 @@
     if (!btn) return;
     const cost = getRecruitmentRefreshCost();
     const affordable = canAfford(cost);
+    const label = 'Nouveaux candidats (' + formatNumber(cost) + ' crédits)';
+    if (label === rendered.refreshLabel && affordable === rendered.refreshAffordable) return;
+    rendered.refreshLabel = label;
+    rendered.refreshAffordable = affordable;
     var textEl = document.getElementById('recruitment-refresh-text');
-    if (textEl) textEl.textContent = 'Nouveaux candidats (' + formatNumber(cost) + ' crédits)';
-    else btn.textContent = 'Nouveaux candidats (' + formatNumber(cost) + ' crédits)';
+    if (textEl) textEl.textContent = label;
+    else btn.textContent = label;
     btn.disabled = !affordable;
     btn.classList.toggle('too-expensive', !affordable);
   }
@@ -1746,24 +1761,40 @@
     team.forEach(function (emp) { appendEmployeeRow(containerTeam, emp); });
   }
 
-  function renderCredits() {
+  /**
+   * `prodHint` évite de recalculer getProductionPerSecond() : la boucle de jeu
+   * l'a déjà fait pour créditer la production du tick.
+   */
+  function renderCredits(prodHint) {
     try {
       const el = document.getElementById('credits');
       const incomeEl = document.getElementById('income');
       if (!el && !incomeEl) return;
       const credits = (typeof state.credits === 'number' && !isNaN(state.credits)) ? state.credits : 0;
-      let prod = 0;
-      try {
-        prod = getProductionPerSecond();
-      } catch (e) {
-        console.warn('getProductionPerSecond error', e);
+      let prod = (typeof prodHint === 'number' && !isNaN(prodHint)) ? prodHint : null;
+      if (prod === null) {
+        prod = 0;
+        try {
+          prod = getProductionPerSecond();
+        } catch (e) {
+          console.warn('getProductionPerSecond error', e);
+        }
       }
-      if (el) el.textContent = formatNumber(credits);
+      if (el) {
+        const txt = formatNumber(credits);
+        if (txt !== rendered.credits) {
+          rendered.credits = txt;
+          el.textContent = txt;
+        }
+      }
       if (incomeEl) {
-        const perHour = (typeof prod === 'number' && !isNaN(prod) ? prod : 0) * 3600;
-        incomeEl.textContent = formatNumber(perHour);
+        const txt = formatNumber((typeof prod === 'number' && !isNaN(prod) ? prod : 0) * 3600);
+        if (txt !== rendered.income) {
+          rendered.income = txt;
+          incomeEl.textContent = txt;
+        }
       }
-      updateRecruitmentRefreshButton();
+      if (isTabActive('candidats')) updateRecruitmentRefreshButton();
     } catch (err) {
       console.error('renderCredits error', err);
     }
@@ -1772,10 +1803,19 @@
   function renderLevel() {
     const levelEl = document.getElementById('level');
     const xpFill = document.getElementById('xp-fill');
-    if (levelEl) levelEl.textContent = state.playerLevel;
+    if (levelEl && state.playerLevel !== rendered.level) {
+      rendered.level = state.playerLevel;
+      levelEl.textContent = state.playerLevel;
+    }
     if (xpFill) {
-      const pct = (state.playerXP / getXpToNextLevel()) * 100;
-      xpFill.style.width = Math.min(100, pct) + '%';
+      const raw = (state.playerXP / getXpToNextLevel()) * 100;
+      // Arrondi au dixième de pourcent : en dessous, la barre ne bouge pas d'un
+      // pixel et l'écriture ne sert qu'à invalider le style.
+      const pct = isFinite(raw) ? Math.min(100, Math.round(raw * 10) / 10) : 0;
+      if (pct !== rendered.xpPct) {
+        rendered.xpPct = pct;
+        xpFill.style.width = pct + '%';
+      }
     }
   }
 
@@ -1800,7 +1840,13 @@
     if (!state.activeEvent || !state.eventEndsAt) return;
     const left = Math.max(0, (state.eventEndsAt - Date.now()) / 1000);
     const timerEl = document.getElementById('event-timer');
-    if (timerEl) timerEl.textContent = 'Fin dans ' + formatDuration(left);
+    if (timerEl) {
+      const txt = 'Fin dans ' + formatDuration(left);
+      if (txt !== rendered.eventTimer) {
+        rendered.eventTimer = txt;
+        timerEl.textContent = txt;
+      }
+    }
     if (left <= 0) endEvent();
   }
 
@@ -2029,6 +2075,7 @@
       const active = state.contrats.find((c) => c.id === def.id && !c.done);
       const card = document.createElement('div');
       card.className = 'contrat-card';
+      card.setAttribute('data-contrat', def.id);
       if (active) {
         const left = Math.max(0, (active.endsAt - Date.now()) / 1000);
         const canClaim = left <= 0;
@@ -2040,6 +2087,40 @@
         card.querySelector('.contrat-start')?.addEventListener('click', () => startContrat(def.id));
       }
       container.appendChild(card);
+    });
+    rendered.contrats = contratsSignature();
+  }
+
+  /**
+   * Décrit ce que les cartes de contrats affichent, hors compte à rebours. Tant
+   * que cette signature ne bouge pas, les cartes sont bonnes : il suffit de
+   * réécrire le minuteur, au lieu de tout reconstruire (et de réattacher tous
+   * les listeners) dix fois par seconde.
+   */
+  function contratsSignature() {
+    const now = Date.now();
+    return CONTRAT_DEFS.map((def) => {
+      if (!isLevelUnlocked(def.levelReq)) return '';
+      const active = state.contrats.find((c) => c.id === def.id && !c.done);
+      if (active) return def.id + ':' + (active.endsAt - now <= 0 ? 'claim' : 'run');
+      return def.id + ':' + (canAfford(def.invest) ? 'buy' : 'poor');
+    }).join('|');
+  }
+
+  function updateContratsUI() {
+    const container = document.getElementById('contrats-list');
+    if (!container) return;
+    if (contratsSignature() !== rendered.contrats) {
+      renderContrats();
+      return;
+    }
+    const now = Date.now();
+    state.contrats.forEach((c) => {
+      if (c.done) return;
+      const desc = container.querySelector('.contrat-card[data-contrat="' + c.id + '"] .desc');
+      if (!desc) return;
+      const txt = 'En cours : ' + formatDuration(Math.max(0, (c.endsAt - now) / 1000));
+      if (desc.textContent !== txt) desc.textContent = txt;
     });
   }
 
@@ -2115,6 +2196,9 @@
     lists.forEach(({ id, type, getState, getDef }) => {
       const container = document.getElementById(id);
       if (!container) return;
+      // Un onglet masqué sera redessiné à son ouverture par renderActiveTab().
+      const panel = container.closest('.tab-panel');
+      if (panel && panel.hidden) return;
       const attr = type === 'upgrade' ? 'data-upgrade' : type === 'office' ? 'data-office' : type === 'branding' ? 'data-branding' : type === 'manager' ? 'data-manager' : type === 'intl' ? 'data-intl' : type === 'training' ? 'data-training' : null;
       if (!attr) return;
       container.querySelectorAll('.upgrade-card[' + attr + '], .compact-row[' + attr + ']').forEach((card) => {
@@ -2132,10 +2216,14 @@
           const countEl = card.querySelector('.compact-row-count');
           const buyBtn = card.querySelector('.compact-row-buy');
           if (priceEl) {
-            priceEl.textContent = maxed ? '—' : formatNumber(price);
+            const priceTxt = maxed ? '—' : formatNumber(price);
+            if (priceEl.textContent !== priceTxt) priceEl.textContent = priceTxt;
             priceEl.classList.toggle('too-expensive', !affordable && !maxed);
           }
-          if (countEl) countEl.textContent = maxed ? (attr === 'data-manager' ? '✓ Max' : '✓ Acheté') : (attr === 'data-manager' ? quantity + '/' + (def.maxQty || '∞') : '');
+          if (countEl) {
+            const countTxt = maxed ? (attr === 'data-manager' ? '✓ Max' : '✓ Acheté') : (attr === 'data-manager' ? quantity + '/' + (def.maxQty || '∞') : '');
+            if (countEl.textContent !== countTxt) countEl.textContent = countTxt;
+          }
           if (buyBtn) buyBtn.disabled = !levelOk || (!maxed && !affordable);
         } else {
           card.disabled = !levelOk || (!maxed && !affordable);
@@ -2190,16 +2278,60 @@
     const desc = document.getElementById('prestige-desc');
     if (!btn || !desc) return;
     const can = canPrestige();
+    const txt = can
+      ? 'Reset et gagne ' + formatNumber(Math.floor(Math.sqrt(state.credits / PRESTIGE_THRESHOLD))) + ' Réputation. Tu perds tout sauf niveau, XP et réputation.'
+      : 'Atteins ' + formatNumber(PRESTIGE_THRESHOLD) + ' crédits pour débloquer le Rebranding.';
+    if (can === rendered.prestigeCan && txt === rendered.prestigeDesc) return;
+    rendered.prestigeCan = can;
+    rendered.prestigeDesc = txt;
     btn.disabled = !can;
-    if (can) {
-      const rep = Math.floor(Math.sqrt(state.credits / PRESTIGE_THRESHOLD));
-      desc.textContent = 'Reset et gagne ' + formatNumber(rep) + ' Réputation. Tu perds tout sauf niveau, XP et réputation.';
-    } else {
-      desc.textContent = 'Atteins ' + formatNumber(PRESTIGE_THRESHOLD) + ' crédits pour débloquer le Rebranding.';
+    desc.textContent = txt;
+  }
+
+  /**
+   * Redessine le contenu de l'onglet visible. La boucle ne rafraîchit plus que
+   * cet onglet : celui qu'on vient d'ouvrir peut afficher des données périmées.
+   */
+  function renderActiveTab() {
+    switch (activeTab) {
+      case 'accueil':
+        renderClickValue();
+        renderQuests();
+        break;
+      case 'candidats':
+        renderRecruitmentContracts();
+        updateRecruitmentRefreshButton();
+        break;
+      case 'equipe':
+        renderEmployeesList();
+        renderManagers();
+        renderTraining();
+        renderSettingsPendingErrors();
+        break;
+      case 'boutique':
+        renderUpgrades();
+        renderOffices();
+        renderBranding();
+        break;
+      case 'plus':
+        renderIntlOffices();
+        renderContrats();
+        renderRnd();
+        renderReputationShop();
+        renderBestRun();
+        renderPrestige();
+        break;
+      case 'reglages':
+        renderSettingsAllQuests();
+        renderSettingsCompletedQuests();
+        renderSettingsPendingErrors();
+        break;
     }
+    updateUpgradesAffordability();
   }
 
   function renderAll() {
+    resetRenderCache();
     var headerName = document.getElementById('header-agency-name');
     if (headerName) headerName.textContent = (state.agencyName && state.agencyName.trim()) ? state.agencyName.trim() : 'DevIdle Agency';
     renderCredits();
@@ -2296,14 +2428,15 @@
   }
 
   function gameLoop(now) {
+    var loopProd = 0;
     try {
     const dt = Math.min((now - lastTick) / 1000, 1);
     lastTick = now;
 
     const prod = getProductionPerSecond();
-    const inc = (typeof prod === 'number' && !isNaN(prod) ? prod : 0) * dt;
-    state.credits = (typeof state.credits === 'number' && !isNaN(state.credits) ? state.credits : 0) + inc;
-    addXP(prod * dt * XP_PER_CREDIT);
+    loopProd = (typeof prod === 'number' && !isNaN(prod)) ? prod : 0;
+    state.credits = (typeof state.credits === 'number' && !isNaN(state.credits) ? state.credits : 0) + loopProd * dt;
+    addXP(loopProd * dt * XP_PER_CREDIT);
 
     if (state.activeEvent && state.eventEndsAt && Date.now() >= state.eventEndsAt) endEvent();
     if (state.agencyEventChoice && state.agencyEventEndsAt <= Date.now()) {
@@ -2334,21 +2467,32 @@
       state.nextErrorRollAt = nowMs + ERROR_ROLL_INTERVAL_MS;
       rollEmployeeErrors();
     }
-    renderEventTimer();
-    maybeTriggerEvent();
-    maybeAgencyEvent();
-    checkQuests();
-    checkChapter();
-    checkChapterObjective();
-    processContrats();
+    if (nowMs - lastLogicRefresh >= LOGIC_REFRESH_MS) {
+      const logicDt = lastLogicRefresh ? nowMs - lastLogicRefresh : LOGIC_REFRESH_MS;
+      lastLogicRefresh = nowMs;
+      maybeTriggerEvent();
+      maybeAgencyEvent(logicDt);
+      checkQuests();
+      checkChapter();
+      checkChapterObjective();
+      processContrats();
+    }
 
     if (state.credits > state.bestRunCredits) state.bestRunCredits = state.credits;
 
     renderLevel();
-    renderContrats();
-    updateUpgradesAffordability();
-    renderPrestige();
-    var hasMentorPenalty = (state.employees || []).some(function (e) { return (e.mentorPenaltyUntil || 0) > nowMs; });
+
+    if (nowMs - lastUiRefresh >= UI_REFRESH_MS) {
+      lastUiRefresh = nowMs;
+      renderEventTimer();
+      updateUpgradesAffordability();
+      if (isTabActive('plus')) {
+        updateContratsUI();
+        renderPrestige();
+      }
+    }
+
+    var hasMentorPenalty = isTabActive('equipe') && (state.employees || []).some(function (e) { return (e.mentorPenaltyUntil || 0) > nowMs; });
     if (hasMentorPenalty && nowMs - lastMentorPenaltyRender > 1000) {
       lastMentorPenaltyRender = nowMs;
       renderEmployeesList();
@@ -2358,7 +2502,7 @@
     } catch (err) {
       console.error('Game loop error:', err);
     }
-    renderCredits();
+    renderCredits(loopProd);
   }
 
   function showClickProfitAnimation(clientX, clientY) {
@@ -2394,6 +2538,9 @@
     const showTab = (tabName) => {
       document.querySelectorAll('.tab-btn').forEach((b) => b.classList.toggle('active', b.getAttribute('data-tab') === tabName));
       document.querySelectorAll('.tab-panel').forEach((p) => (p.hidden = p.id !== 'tab-' + tabName));
+      activeTab = tabName;
+      resetRenderCache();
+      renderActiveTab();
     };
     document.querySelectorAll('.tab-btn').forEach((btn) => {
       btn.addEventListener('click', () => showTab(btn.getAttribute('data-tab')));
@@ -2484,10 +2631,24 @@
       if (e.target && e.target.id === 'skill-tree-modal') closeSkillTreeModal();
     });
 
-    document.getElementById('btn-deconnexion')?.addEventListener('click', function () {
+    // Réinitialisation de la partie : destructive et irréversible, donc jamais
+    // en un seul geste — la modale de confirmation est obligatoire.
+    var resetModal = document.getElementById('reset-modal');
+    var closeResetModal = function () { if (resetModal) resetModal.hidden = true; };
+    document.getElementById('btn-reset-partie')?.addEventListener('click', function () {
+      if (resetModal) resetModal.hidden = false;
+    });
+    document.getElementById('reset-cancel')?.addEventListener('click', closeResetModal);
+    document.getElementById('reset-modal-close')?.addEventListener('click', closeResetModal);
+    resetModal?.addEventListener('click', function (e) {
+      if (e.target === resetModal) closeResetModal();
+    });
+    document.getElementById('reset-confirm')?.addEventListener('click', function () {
       try {
         localStorage.removeItem(SAVE_KEY);
       } catch (e) {}
+      // La sauvegarde du beforeunload réécrirait la partie qu'on vient d'effacer.
+      window.removeEventListener('beforeunload', saveOnUnload);
       window.location.reload();
     });
 
@@ -2514,12 +2675,10 @@
     const btnPrestige = document.getElementById('btn-prestige');
     if (btnPrestige) btnPrestige.addEventListener('click', doPrestige);
 
+    // La boucle rafraîchit déjà l'affichage des crédits à chaque tick : le
+    // setInterval de 150 ms qui doublonnait ici a été supprimé.
     setInterval(() => gameLoop(performance.now()), TICK_MS);
-    setInterval(renderCredits, 150);
-    window.addEventListener('beforeunload', function () {
-      state.forceSyncNextSave = true;
-      save();
-    });
+    window.addEventListener('beforeunload', saveOnUnload);
   }
 
   function init() {

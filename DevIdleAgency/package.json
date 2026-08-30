@@ -1,7 +1,7 @@
 {
   "name": "devidle-agency",
   "version": "1.0.0",
-  "description": "DevIdle Agency - Jeu idle mobile-first avec auth Supabase",
+  "description": "DevIdle Agency - Jeu idle mobile-first, 100 % hors ligne",
   "type": "module",
   "scripts": {
     "dev": "vite --host",
@@ -17,8 +17,5 @@
   "devDependencies": {
     "typescript": "^5.3.3",
     "vite": "^5.0.10"
-  },
-  "dependencies": {
-    "@supabase/supabase-js": "^2.39.0"
   }
 }
