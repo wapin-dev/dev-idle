@@ -1582,25 +1582,8 @@ body.tapstorm-theme .modal.modal-popup .levelup-validate-btn:hover:not(:disabled
 }
 
 /* ----- Périmètre v1 : contenu annoncé « Bientôt » ----- */
-/* Onglets visibles mais inertes : le cadenas dit l'état, le toast dit quand. */
-body.tapstorm-theme #game-screen .tapstorm-nav .tab-btn.tab-btn-locked {
-  position: relative;
-  opacity: 0.45;
-  cursor: default;
-}
-body.tapstorm-theme #game-screen .tapstorm-nav .tab-btn.tab-btn-locked:active {
-  background: transparent;
-}
-body.tapstorm-theme #game-screen .tapstorm-nav .tab-btn-locked .tab-soon-badge {
-  position: absolute;
-  top: 2px;
-  right: 50%;
-  transform: translateX(150%);
-  font-size: 0.6rem;
-  line-height: 1;
-  pointer-events: none;
-}
-
+/* Les onglets verrouillés sont retirés de la barre, pas grisés : voir
+   removeLockedTabButton() dans game.js. */
 body.tapstorm-theme #game-screen .plus-locked-card {
   text-align: center;
   opacity: 0.75;

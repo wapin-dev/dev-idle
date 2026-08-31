@@ -2731,32 +2731,38 @@
   }
 
   /**
-   * Un onglet verrouillé reste tapable : sans retour visuel, le joueur croirait
-   * l'appui perdu. On explique au lieu de ne rien faire.
+   * Retire de la barre l'onglet d'une fonctionnalité verrouillée.
+   *
+   * Ces onglets étaient d'abord affichés grisés avec un cadenas. À sept
+   * emplacements dont deux inertes, la barre était encombrée et les libellés se
+   * coupaient en deux lignes faute de largeur : on préfère quatre destinations
+   * lisibles à six dont un tiers ne mène nulle part.
+   *
+   * On retire l'élément du DOM plutôt que de poser `hidden` : la règle
+   * `.tapstorm-nav .tab-btn` fixe `display: flex` avec une spécificité qui bat
+   * l'attribut `[hidden]`, le bouton resterait visible. Repasser
+   * V1_LOCKS_ENABLED à false le fait revenir, il vient de index.html.
    */
-  function showComingSoonToast(message) {
-    showToast(message, 2200);
+  function removeLockedTabButton(btn) {
+    btn.remove();
   }
 
-  /** Marque un onglet « Bientôt » : visible, inerte, et qui le dit. */
-  function lockTabButton(btn, tabName) {
-    btn.classList.add('tab-btn-locked');
-    btn.setAttribute('aria-disabled', 'true');
-    var labelEl = btn.querySelector('.nav-label');
-    var label = labelEl ? labelEl.textContent : tabName;
-    // Le libellé « Bientôt » ne tient pas dans un bouton de nav de ~50 px : le
-    // cadenas signale l'état, le toast au clic porte le mot.
-    btn.title = label + ' — bientôt disponible';
-    if (!btn.querySelector('.tab-soon-badge')) {
-      var badge = document.createElement('span');
-      badge.className = 'tab-soon-badge';
-      badge.setAttribute('aria-hidden', 'true');
-      badge.textContent = '🔒';
-      btn.appendChild(badge);
-    }
-    btn.addEventListener('click', function () {
-      showComingSoonToast(label + ' arrive dans une prochaine mise à jour.');
-    });
+  /**
+   * Replace le bouton de clic au milieu de la barre.
+   *
+   * Sa position dans index.html suppose six onglets ; en retirer deux devant lui
+   * le décale sur la gauche. On le recalcule à partir des onglets réellement
+   * présents, ce qui reste juste quel que soit l'état des verrous.
+   */
+  function centerClickButton() {
+    var nav = document.querySelector('.tapstorm-nav');
+    var clickBtn = document.getElementById('btn-code-nav');
+    if (!nav || !clickBtn) return;
+    var tabs = [].slice.call(nav.querySelectorAll('.tab-btn'));
+    if (!tabs.length) return;
+    var milieu = Math.ceil(tabs.length / 2);
+    if (milieu >= tabs.length) nav.appendChild(clickBtn);
+    else nav.insertBefore(clickBtn, tabs[milieu]);
   }
 
   /**
@@ -2801,11 +2807,12 @@
     document.querySelectorAll('.tab-btn').forEach((btn) => {
       const tabName = btn.getAttribute('data-tab');
       if (isFeatureLocked(tabName)) {
-        lockTabButton(btn, tabName);
+        removeLockedTabButton(btn);
         return;
       }
       btn.addEventListener('click', () => showTab(tabName));
     });
+    centerClickButton();
     showTab('accueil');
   }
 
