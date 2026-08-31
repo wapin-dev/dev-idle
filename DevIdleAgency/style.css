@@ -1608,9 +1608,16 @@ body.tapstorm-theme #game-screen .plus-locked-card {
 
 .coming-soon-toast {
   position: fixed;
-  left: 50%;
+  /* `left: 50%` seul limiterait la largeur disponible à la moitié droite du
+     viewport : le translateX ne recentre qu'après coup, et le texte se coupait
+     bien avant les 340 px annoncés. On borne des deux côtés et on centre par
+     les marges automatiques. */
+  left: 12px;
+  right: 12px;
+  margin-inline: auto;
+  width: max-content;
   bottom: calc(76px + max(14px, env(safe-area-inset-bottom, 0px)));
-  transform: translate(-50%, 8px);
+  transform: translateY(8px);
   z-index: 400;
   max-width: min(88vw, 340px);
   padding: 10px 16px;
@@ -1627,8 +1634,8 @@ body.tapstorm-theme #game-screen .plus-locked-card {
 }
 .coming-soon-toast.is-visible {
   opacity: 1;
-  transform: translate(-50%, 0);
+  transform: translateY(0);
 }
 @media (prefers-reduced-motion: reduce) {
-  .coming-soon-toast { transition: opacity 0.2s ease; transform: translate(-50%, 0); }
+  .coming-soon-toast { transition: opacity 0.2s ease; transform: translateY(0); }
 }

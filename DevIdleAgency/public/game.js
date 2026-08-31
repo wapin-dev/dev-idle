@@ -2,7 +2,37 @@
   'use strict';
 
   const SAVE_KEY = 'agence-dev-idle-save-v4';
+  /**
+   * Copie de la sauvegarde d'origine, posée avant toute opération qui pourrait
+   * la perdre : migration, ou sauvegarde illisible. On n'écrase jamais la
+   * progression de quelqu'un sans en garder une trace récupérable.
+   */
+  const SAVE_BACKUP_KEY = SAVE_KEY + '-backup';
   const SAVE_VERSION = 1;
+
+  /**
+   * Migrations de sauvegarde.
+   *
+   * `SAVE_MIGRATIONS[n]` transforme une sauvegarde de la version n vers n+1 et
+   * renvoie les données migrées. Les étapes sont appliquées à la suite jusqu'à
+   * SAVE_VERSION : une partie de n'importe quelle version passée remonte en une
+   * seule passe, sans avoir à prévoir chaque couple de versions.
+   *
+   * Pour ajouter une migration :
+   *   1. incrémenter SAVE_VERSION ;
+   *   2. ajouter l'entrée portant le numéro de l'*ancienne* version.
+   *
+   * Une étape ne doit jamais supposer qu'un champ existe : les sauvegardes
+   * anciennes sont incomplètes par nature, et `load()` ne fait confiance à
+   * aucune valeur de toute façon.
+   *
+   * Exemple, pour passer de 1 à 2 :
+   *   SAVE_VERSION = 2;
+   *   SAVE_MIGRATIONS = {
+   *     1: function (data) { data.nouveauChamp = data.ancienChamp || 0; return data; },
+   *   };
+   */
+  const SAVE_MIGRATIONS = {};
   const TICK_MS = 100;
   // La boucle tourne à 100 ms pour la production, mais l'interface n'a pas besoin
   // de suivre cette cadence : les listes et les boutons sont rafraîchis 4 fois par
@@ -394,6 +424,12 @@
   var lastUiRefresh = 0;
   var lastLogicRefresh = 0;
   var activeTab = 'accueil';
+  /**
+   * Coupe toute écriture pour la session. Posé quand la sauvegarde trouvée vient
+   * d'une version postérieure du jeu : mieux vaut une session sans progression
+   * enregistrée qu'une partie plus avancée détruite.
+   */
+  var saveBlocked = false;
   // Dernières valeurs réellement écrites dans le DOM. La boucle repeignait dix
   // fois par seconde des textes identiques ; on ne touche plus au DOM que quand
   // la valeur affichée change.
@@ -1242,6 +1278,7 @@
   }
 
   function save() {
+    if (saveBlocked) return;
     try {
       const savedAt = Date.now();
       const payload = {
@@ -1297,11 +1334,103 @@
   // dernière sauvegarde, sinon elle réécrit la partie qu'on vient d'effacer.
   function saveOnUnload() { save(); }
 
-  function load() {
+  /** Met la sauvegarde brute de côté avant une opération qui pourrait la perdre. */
+  function backupRawSave(raw, reason) {
     try {
-      const raw = localStorage.getItem(SAVE_KEY);
-      if (!raw) return;
-      const data = JSON.parse(raw);
+      localStorage.setItem(SAVE_BACKUP_KEY, JSON.stringify({ raw: raw, reason: reason, at: Date.now() }));
+    } catch (e) {
+      console.warn('Save backup failed', e);
+    }
+  }
+
+  /**
+   * Lit la sauvegarde et la remonte jusqu'à SAVE_VERSION.
+   *
+   * @returns {{status: string, data: object|null, from: number|null}}
+   *   status vaut :
+   *   - 'ok'            : données exploitables dans `data` ;
+   *   - 'vide'          : aucune partie enregistrée ;
+   *   - 'illisible'     : JSON cassé ou forme inattendue, copie mise de côté ;
+   *   - 'echec'         : une étape de migration a levé, copie mise de côté ;
+   *   - 'trop-recente'  : écrite par une version postérieure du jeu.
+   */
+  function readAndMigrateSave() {
+    var raw = null;
+    try {
+      raw = localStorage.getItem(SAVE_KEY);
+    } catch (e) {
+      // localStorage inaccessible (mode privé, quota, WebView verrouillée).
+      console.warn('Save read failed', e);
+      return { status: 'illisible', data: null, from: null };
+    }
+    if (!raw) return { status: 'vide', data: null, from: null };
+
+    var data;
+    try {
+      data = JSON.parse(raw);
+    } catch (e) {
+      backupRawSave(raw, 'illisible');
+      return { status: 'illisible', data: null, from: null };
+    }
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      backupRawSave(raw, 'illisible');
+      return { status: 'illisible', data: null, from: null };
+    }
+
+    // Une sauvegarde sans numéro de version est antérieure à l'introduction du
+    // champ : c'est la version 1 par convention.
+    var version = (typeof data.save_version === 'number' && data.save_version >= 1)
+      ? Math.floor(data.save_version)
+      : 1;
+    var from = version;
+
+    // Sauvegarde écrite par une version postérieure du jeu — typiquement une
+    // réinstallation d'un APK plus ancien. On ne sait pas la lire, et surtout on
+    // ne doit pas l'écraser : elle reste intacte sur le disque et l'écriture est
+    // coupée le temps de la session.
+    if (version > SAVE_VERSION) {
+      return { status: 'trop-recente', data: null, from: from };
+    }
+
+    if (version < SAVE_VERSION) {
+      backupRawSave(raw, 'migration-v' + from);
+      try {
+        while (version < SAVE_VERSION) {
+          var step = SAVE_MIGRATIONS[version];
+          if (typeof step !== 'function') {
+            throw new Error('Migration manquante de la version ' + version + ' vers ' + (version + 1));
+          }
+          data = step(data) || data;
+          if (!data || typeof data !== 'object' || Array.isArray(data)) {
+            throw new Error('La migration depuis la version ' + version + ' n\'a pas renvoyé d\'objet');
+          }
+          version += 1;
+        }
+      } catch (e) {
+        console.warn('Migration failed', e);
+        return { status: 'echec', data: null, from: from };
+      }
+      data.save_version = SAVE_VERSION;
+    }
+
+    return { status: 'ok', data: data, from: from };
+  }
+
+  /**
+   * Charge la partie. Renvoie le statut de lecture pour qu'`init()` décide quoi
+   * montrer au joueur : une sauvegarde illisible ne doit pas passer pour une
+   * absence de sauvegarde.
+   */
+  function load() {
+    var read = readAndMigrateSave();
+    if (read.status !== 'ok') {
+      // Une sauvegarde qu'on ne sait pas lire ne doit pas être écrasée par
+      // l'autosave cinq secondes plus tard.
+      if (read.status === 'trop-recente') saveBlocked = true;
+      return read.status;
+    }
+    try {
+      const data = read.data;
       if (typeof data.credits === 'number') state.credits = data.credits;
       if (typeof data.clickPower === 'number') state.clickPower = data.clickPower;
       if (typeof data.playerLevel === 'number') state.playerLevel = data.playerLevel;
@@ -1379,7 +1508,9 @@
       if (typeof data.lastSave === 'number') state.lastSave = Math.min(data.lastSave, Date.now());
     } catch (e) {
       console.warn('Load failed', e);
+      return 'echec';
     }
+    return 'ok';
   }
 
   var levelUpSelectedId = null;
@@ -2581,13 +2712,10 @@
     }
   }
 
-  var comingSoonTimer = null;
+  var toastTimer = null;
 
-  /**
-   * Un onglet verrouillé reste tapable : sans retour visuel, le joueur croirait
-   * l'appui perdu. On explique au lieu de ne rien faire.
-   */
-  function showComingSoonToast(message) {
+  /** Message transitoire en bas de l'écran. */
+  function showToast(message, durationMs) {
     var el = document.getElementById('coming-soon-toast');
     if (!el) {
       el = document.createElement('div');
@@ -2598,8 +2726,16 @@
     }
     el.textContent = message;
     el.classList.add('is-visible');
-    if (comingSoonTimer) clearTimeout(comingSoonTimer);
-    comingSoonTimer = setTimeout(function () { el.classList.remove('is-visible'); }, 2200);
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.classList.remove('is-visible'); }, durationMs || 2200);
+  }
+
+  /**
+   * Un onglet verrouillé reste tapable : sans retour visuel, le joueur croirait
+   * l'appui perdu. On explique au lieu de ne rien faire.
+   */
+  function showComingSoonToast(message) {
+    showToast(message, 2200);
   }
 
   /** Marque un onglet « Bientôt » : visible, inerte, et qui le dit. */
@@ -2771,6 +2907,7 @@
     document.getElementById('reset-confirm')?.addEventListener('click', function () {
       try {
         localStorage.removeItem(SAVE_KEY);
+        localStorage.removeItem(SAVE_BACKUP_KEY);
       } catch (e) {}
       // La sauvegarde du beforeunload réécrirait la partie qu'on vient d'effacer.
       window.removeEventListener('beforeunload', saveOnUnload);
@@ -2807,12 +2944,29 @@
   }
 
   function init() {
+    var loadStatus = 'echec';
     try {
-      load();
+      loadStatus = load();
     } catch (e) {
       console.warn('Load failed', e);
     }
-    var hasSave = !!localStorage.getItem(SAVE_KEY);
+
+    // `hasSave` décide d'afficher ou non l'écran « nom de l'agence ». Il vaut
+    // désormais « une partie a bien été chargée », et non « une clé existe dans
+    // localStorage » : une sauvegarde illisible menait sinon à une partie neuve
+    // et sans nom, que l'autosave écrasait par-dessus l'ancienne.
+    var hasSave = loadStatus === 'ok';
+
+    if (loadStatus === 'illisible' || loadStatus === 'echec') {
+      // La copie de secours a été posée par readAndMigrateSave().
+      setTimeout(function () {
+        showToast('Ta sauvegarde n\'a pas pu être lue. Une copie a été conservée, une nouvelle partie commence.', 8000);
+      }, 1200);
+    } else if (loadStatus === 'trop-recente') {
+      setTimeout(function () {
+        showToast('Cette partie vient d\'une version plus récente du jeu. Elle est conservée intacte : mets l\'application à jour pour la reprendre.', 10000);
+      }, 1200);
+    }
     var agencyScreen = document.getElementById('agency-name-screen');
     var gameScreen = document.getElementById('game-screen');
 
