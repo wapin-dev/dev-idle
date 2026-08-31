@@ -424,21 +424,6 @@ html {
   max-height: 60vh;
   overflow-y: auto;
 }
-.settings-completed-quests-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.settings-completed-quest-item {
-  padding: 8px 10px;
-  border-radius: var(--radius-sm);
-  background: var(--surface-alt);
-  font-size: 0.9rem;
-  border-left: 3px solid var(--accent);
-}
-.settings-all-quests-list {
-  margin-top: 8px;
-}
 .error-modal-impact {
   font-size: 0.9rem;
   color: var(--danger);

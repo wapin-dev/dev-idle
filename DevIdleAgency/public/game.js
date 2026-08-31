@@ -2075,35 +2075,6 @@
     if (modal) modal.hidden = true;
   }
 
-  function renderSettingsAllQuests() {
-    var list = document.getElementById('settings-all-quests-list');
-    if (!list) return;
-    list.innerHTML = '';
-    QUESTS.forEach(function (q) {
-      var done = state.completedQuests.includes(q.id);
-      var div = document.createElement('div');
-      div.className = 'quest-item' + (done ? ' done' : '');
-      div.innerHTML = '<span>' + escapeHtml(q.name) + '</span><span class="quest-progress">' + (done ? '✓ Fait' : 'En cours') + '</span>';
-      list.appendChild(div);
-    });
-  }
-
-  function renderSettingsCompletedQuests() {
-    var list = document.getElementById('settings-completed-quests-list');
-    var emptyEl = document.getElementById('settings-completed-quests-empty');
-    if (!list) return;
-    list.innerHTML = '';
-    var completedSet = state.completedQuests || [];
-    var completed = QUESTS.filter(function (q) { return completedSet.includes(q.id); });
-    if (emptyEl) emptyEl.hidden = completed.length > 0;
-    completed.forEach(function (q) {
-      var div = document.createElement('div');
-      div.className = 'settings-completed-quest-item';
-      div.textContent = q.name;
-      list.appendChild(div);
-    });
-  }
-
   function renderUpgrades() {
     const container = document.getElementById('upgrades-list');
     if (!container) return;
@@ -2500,8 +2471,6 @@
         renderPrestige();
         break;
       case 'reglages':
-        renderSettingsAllQuests();
-        renderSettingsCompletedQuests();
         renderSettingsPendingErrors();
         break;
     }
@@ -2532,8 +2501,6 @@
     renderReputationShop();
     renderBestRun();
     renderPrestige();
-    renderSettingsAllQuests();
-    renderSettingsCompletedQuests();
     renderPendingErrorsBadge();
     renderSettingsPendingErrors();
   }
