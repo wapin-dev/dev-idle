@@ -15,7 +15,13 @@
     "cap:open:ios": "cap open ios"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.0",
     "typescript": "^5.3.3",
     "vite": "^5.0.10"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/core": "^8.5.0"
   }
 }

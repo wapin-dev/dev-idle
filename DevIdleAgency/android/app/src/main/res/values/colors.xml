@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Palette de l'application, reprise de l'interface web (index.html / style.css).
+  styles.xml référençait colorPrimary, colorPrimaryDark et colorAccent sans
+  qu'ils soient définis ici : ils étaient hérités de la bibliothèque Capacitor.
+-->
+<resources>
+    <color name="colorPrimary">#8B5CF6</color>
+    <color name="colorPrimaryDark">#5B21B6</color>
+    <color name="colorAccent">#2DD4BF</color>
+    <!-- Fond du jeu : l'écran de lancement doit s'y fondre, sinon l'app
+         flashe en blanc avant d'afficher la page. -->
+    <color name="splashBackground">#1A1625</color>
+</resources>

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Milieu du dégradé, pour les surfaces qui ne prennent qu'une couleur plate. -->
+    <color name="ic_launcher_background">#6D28D9</color>
+</resources>

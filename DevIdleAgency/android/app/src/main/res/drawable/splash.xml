@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Écran de lancement : fond sombre du jeu + logo centré. Remplace le splash.png
+  livré par Capacitor, qui était le logo Capacitor sur fond blanc.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/splashBackground"/>
+    <item>
+        <bitmap
+            android:src="@mipmap/ic_launcher_foreground"
+            android:gravity="center"/>
+    </item>
+</layer-list>

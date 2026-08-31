@@ -19,7 +19,10 @@
   --shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   --shadow-panel: 0 4px 24px rgba(0, 0, 0, 0.2);
   --card-border: #cbd5e1;
-  --font: 'Inter', system-ui, sans-serif;
+  /* Pile système : Inter a été retirée le 2026-08-31, elle n'était jamais
+     appliquée (body.game-active dans game.css bat ce body) et la mise en page
+     est réglée pour ces métriques. */
+  --font: "Segoe UI", system-ui, -apple-system, sans-serif;
 }
 
 * {

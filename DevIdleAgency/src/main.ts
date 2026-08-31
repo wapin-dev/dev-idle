@@ -7,6 +7,8 @@
  * besoin de window.getIconUrl au moment où elle s'exécute.
  */
 import '../style.css';
+import { App } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
 import { getIconPath, getIconUrl, getFallbackIconPath } from './icons';
 
 function exposeIcons(): void {
@@ -38,8 +40,44 @@ function exposeIcons(): void {
   }, true);
 }
 
+/**
+ * Bouton retour Android.
+ *
+ * Sans gestionnaire, le retour quitte l'application depuis n'importe quel
+ * écran — y compris une modale ouverte. On dépile dans l'ordre attendu :
+ * modale, puis onglet, puis mise en arrière-plan.
+ *
+ * On passe par le DOM plutôt que par l'état de game.js : celui-ci est chargé
+ * par une balise <script> et n'expose rien. Les sélecteurs utilisés sont ceux
+ * de index.html (`.modal-overlay`, `.modal-close`, `.tab-btn`).
+ */
+function handleBackButton(): void {
+  // Les modales à choix obligatoire (montée de niveau, événement d'agence)
+  // n'ont pas de bouton de fermeture : le retour ne doit pas les contourner.
+  const openModals = document.querySelectorAll<HTMLElement>('.modal-overlay:not([hidden])');
+  const topModal = openModals[openModals.length - 1];
+  if (topModal) {
+    if (topModal.classList.contains('modal-require-choice')) return;
+    topModal.querySelector<HTMLButtonElement>('.modal-close')?.click();
+    return;
+  }
+
+  const activeTab = document.querySelector<HTMLButtonElement>('.tab-btn.active');
+  if (activeTab && activeTab.getAttribute('data-tab') !== 'accueil') {
+    document.querySelector<HTMLButtonElement>('.tab-btn[data-tab="accueil"]')?.click();
+    return;
+  }
+
+  // Depuis l'accueil : on met en arrière-plan au lieu de quitter. Le jeu
+  // calcule des gains hors-ligne, sortir ne doit pas ressembler à une perte.
+  void App.minimizeApp();
+}
+
 function boot(): void {
   exposeIcons();
+  if (Capacitor.isNativePlatform()) {
+    void App.addListener('backButton', handleBackButton);
+  }
   const script = document.createElement('script');
   script.src = '/game.js';
   script.async = false;

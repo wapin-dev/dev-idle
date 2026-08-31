@@ -1,112 +1,103 @@
 # DevIdle Agency
 
-Jeu idle **mobile-first** (Agence AFK) : TypeScript + Vite, auth Supabase, sauvegarde des progrès. Prêt pour PWA et packaging Capacitor (Android / iOS).
+Jeu idle **mobile-first** (agence de dev), **100 % hors ligne** : TypeScript +
+Vite pour la coquille, la logique de jeu dans `public/game.js`, sauvegarde dans
+le `localStorage`. Empaqueté en application Android avec Capacitor.
 
-## Lancer le projet
+Aucun compte, aucun serveur, aucune donnée qui sort de l'appareil.
+
+## Lancer en développement
 
 ```bash
 cd DevIdleAgency
-cp .env.example .env
-# Édite .env avec tes clés Supabase (optionnel pour jouer en local)
 npm install
 npm run dev
 ```
 
-Ouvre **http://localhost:5173** dans ton navigateur.
+Ouvre **http://localhost:5173**. `npm run dev` écoute aussi sur l'IP locale : le
+lien **Network** affiché par Vite permet de tester depuis un téléphone sur le
+même Wi-Fi.
 
----
-
-## Faire essayer en local (à d’autres personnes)
-
-1. **Sur ta machine** (à la racine du projet) :
-   ```bash
-   cd DevIdleAgency
-   npm install
-   npm run dev
-   ```
-
-2. **Sur la même machine**  
-   Ouvre **http://localhost:5173**.
-
-3. **Sur le même réseau Wi‑Fi (téléphone, autre PC)**  
-   Le serveur écoute sur ton IP locale. Dans le terminal, Vite affiche par exemple :
-   ```text
-   ➜  Local:   http://localhost:5173/
-   ➜  Network: http://192.168.1.42:5173/
-   ```
-   Donne le lien **Network** aux autres (en remplaçant par l’IP affichée chez toi). Ils ouvrent ce lien dans leur navigateur pour tester le jeu.
-
-4. **Sans Node sur la machine des testeurs**  
-   Seule ta machine doit avoir `npm run dev` lancé ; les autres accèdent au jeu via le lien Network dans leur navigateur.
-
-**Résumé** : `npm run dev` une fois chez toi → partage le lien **Network** (ex. `http://192.168.1.42:5173`) pour que les gens testent en local sur le même réseau.
-
-## Build
+## Build web
 
 ```bash
-npm run build
+npm run build     # sortie dans dist/
+npm run preview   # sert dist/ sur http://localhost:4173
 ```
 
-Sortie dans `dist/`.
+## Application Android
 
-## Supabase
+Le projet natif est déjà généré (`android/`) et versionné. Il n'y a plus de
+`cap init` ni de `cap add android` à faire.
 
-### 1. Créer le projet
+### Prérequis
 
-Sur [supabase.com](https://supabase.com), crée un projet et récupère l’URL et la clé anonyme (anon key).
-
-### 2. Table des progrès
-
-Dans l’éditeur SQL Supabase, exécute :
-
-```sql
-create table if not exists public.users_progress (
-  id uuid primary key references auth.users(id) on delete cascade,
-  progress jsonb not null default '{}',
-  updated_at timestamptz not null default now()
-);
-
-alter table public.users_progress enable row level security;
-
-create policy "Users can read own progress"
-  on public.users_progress for select
-  using (auth.uid() = id);
-
-create policy "Users can insert own progress"
-  on public.users_progress for insert
-  with check (auth.uid() = id);
-
-create policy "Users can update own progress"
-  on public.users_progress for update
-  using (auth.uid() = id);
-```
-
-### 3. Auth
-
-Dans le dashboard Supabase : **Authentication > Providers**, active **Email**. Les utilisateurs pourront s’inscrire et se connecter avec email + mot de passe.
-
-## Publication (stores)
-
-1. Build : `npm run build`
-2. Capacitor :
+- Android Studio (fournit le SDK **et** le JDK).
+- Java n'est pas sur le `PATH` par défaut sur macOS : il faut pointer `JAVA_HOME`
+  sur le JDK embarqué dans Android Studio.
 
 ```bash
-npm install @capacitor/core @capacitor/cli
-npx cap init
-npx cap add android
-npx cap add ios
+export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 ```
 
-3. Dans `capacitor.config.json`, `webDir` pointe déjà sur `dist`.
-4. Après chaque build : `npx cap sync`
-5. Ouvrir le projet natif : `npx cap open android` ou `npx cap open ios`
+### Compiler
+
+```bash
+npm run cap:sync                      # build web + copie dans android/
+cd android && ./gradlew assembleDebug # APK de debug
+```
+
+L'APK sort dans `android/app/build/outputs/apk/debug/app-debug.apk`.
+
+Pour ouvrir le projet dans Android Studio : `npm run cap:open:android`.
+
+### Attention : iCloud Drive
+
+Le projet est sur le Bureau, synchronisé par iCloud. Pendant une compilation
+Gradle, iCloud duplique des fichiers en `nom 2.ext`, ce qui fait échouer la
+tâche `parseDebugLocalResources` :
+
+```
+Failed file name validation for file .../ic_launcher_background 2.xml
+```
+
+Nettoyage :
+
+```bash
+find . -name "* [0-9]*" -not -path "./node_modules/*" -print0 | xargs -0 rm -rf
+```
+
+La solution durable est de sortir le projet du Bureau synchronisé.
+
+## Icônes
+
+L'icône (chevrons de code et curseur, sur le violet de l'interface) est déclinée
+dans `android/app/src/main/res/mipmap-*/` et dans `public/assets/icons/`
+(`app-icon-192.png`, `app-icon-512.png`, référencées par `manifest.json`).
+
+Le Play Store demande en plus un visuel **512 × 512** au dépôt : utiliser
+`public/assets/icons/app-icon-512.png`.
 
 ## Structure
 
-- `src/main.ts` – entrée, auth, boucle de jeu, rendu UI
-- `src/auth.ts` – signup / login / logout Supabase
-- `src/storage.ts` – load / save progrès (table `users_progress`)
-- `src/game.ts` – logique (credits, prod/s, upgrades)
-- `src/types.ts` – types (Employe, Contrat, Progress, etc.)
+- `index.html` – toute la structure de l'interface (onglets, modales)
+- `public/game.js` – **la logique du jeu** : état, boucle, production, upgrades,
+  objectifs, prestige, sauvegarde (~2500 lignes, non bundlé, chargé par une
+  balise `<script>` injectée depuis `main.ts`)
+- `public/game.css` + `style.css` – styles ; `style.css` porte le thème actif
+  (`tapstorm-theme`) et gagne sur `game.css` là où les deux se croisent
+- `src/main.ts` – point d'entrée : expose les icônes, gère le bouton retour
+  Android, puis charge `game.js`
+- `src/icons.ts` – résolution des chemins d'icônes locales
+- `capacitor.config.json` – `appId` `com.devidle.agency`, `webDir` sur `dist`
 
-Le jeu complet (contrats, employés, erreurs, prestige) du dossier parent peut être fusionné dans `game.ts` et les écrans étendus dans `index.html` + `main.ts`.
+## Périmètre de la v1
+
+Certains systèmes sont **présents dans le code mais désactivés** pour la
+première version : les onglets Candidats et Équipe (donc l'arbre de compétences,
+les Cadres et les Formations) et les sections International, Contrats et R&D de
+l'onglet Plus.
+
+Tout est piloté par un seul bloc en tête de `public/game.js` :
+`V1_LOCKS_ENABLED`, `LOCKED_TABS`, `LOCKED_PLUS_SECTIONS`, `LOCKED_QUEST_IDS`.
+Repasser `V1_LOCKS_ENABLED` à `false` rallume l'ensemble.
