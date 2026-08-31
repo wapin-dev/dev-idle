@@ -69,6 +69,70 @@ find . -name "* [0-9]*" -not -path "./node_modules/*" -print0 | xargs -0 rm -rf
 
 La solution durable est de sortir le projet du Bureau synchronisé.
 
+## Publier sur le Play Store
+
+Le Play Store attend un **AAB** (`bundleRelease`), pas un APK. L'artefact doit
+être signé par une clé qui t'appartient : c'est elle qui prouve, à chaque mise à
+jour, qu'il s'agit bien de la même application.
+
+### 1. Générer la clé — une seule fois, à faire soi-même
+
+```bash
+export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+"$JAVA_HOME/bin/keytool" -genkeypair -v \
+  -keystore ~/cles/devidle-release.jks \
+  -alias devidle \
+  -keyalg RSA -keysize 2048 -validity 10000
+```
+
+`keytool` demande deux mots de passe (keystore et clé) puis quelques
+informations d'identité. Choisis un emplacement **hors du dépôt** — ici
+`~/cles/`.
+
+> **Ce fichier n'est pas remplaçable.** Le perdre, ou perdre ses mots de passe,
+> rend toute mise à jour de l'application impossible sur le Play Store : il faut
+> alors republier sous un nouvel identifiant et repartir de zéro côté
+> installations. Sauvegarde-le ailleurs que sur cette machine.
+
+### 2. Renseigner les identifiants
+
+```bash
+cp android/keystore.properties.example android/keystore.properties
+# puis remplir les quatre valeurs
+```
+
+`android/keystore.properties` et tout fichier `*.jks` / `*.keystore` sont
+ignorés par git — les mots de passe ne doivent jamais entrer dans l'historique.
+`storeFile` est résolu depuis le dossier `android/`, un chemin absolu marche
+aussi.
+
+### 3. Compiler
+
+```bash
+export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+npm run cap:sync
+cd android && ./gradlew bundleRelease
+```
+
+Sortie : `android/app/build/outputs/bundle/release/app-release.aab`.
+
+Sans `keystore.properties`, une compilation de release s'arrête avec un message
+explicite plutôt que de produire un artefact non signé que le Store refuserait.
+Les compilations de debug, elles, n'ont besoin de rien.
+
+### 4. À chaque nouvelle version
+
+Incrémenter `versionCode` (entier, strictement croissant, invisible pour le
+joueur) et `versionName` (la version affichée) dans
+`android/app/build.gradle`. Le Store refuse deux dépôts avec le même
+`versionCode`.
+
+### Vérifier la signature d'un artefact
+
+```bash
+"$JAVA_HOME/bin/keytool" -printcert -jarfile app-release.aab
+```
+
 ## Icônes
 
 L'icône (chevrons de code et curseur, sur le violet de l'interface) est déclinée

@@ -53,9 +53,12 @@ captures/
 .idea/navEditor.xml
 
 # Keystore files
-# Uncomment the following lines if you do not want to check your keystore files in.
-#*.jks
-#*.keystore
+# Signature de release : ni la clé, ni les mots de passe qui l'ouvrent.
+# Perdre ce keystore signifie ne plus jamais pouvoir mettre l'application à jour
+# sur le Play Store — le sauvegarder hors du dépôt est indispensable.
+*.jks
+*.keystore
+keystore.properties
 
 # External native build folder generated in Android Studio 2.2 and later
 .externalNativeBuild

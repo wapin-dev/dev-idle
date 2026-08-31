@@ -1,5 +1,54 @@
 apply plugin: 'com.android.application'
 
+/*
+ * Signature de release.
+ *
+ * Les identifiants ne sont pas versionnés : ils sont lus depuis
+ * android/keystore.properties, ignoré par git. Voir keystore.properties.example
+ * et la section « Publier sur le Play Store » du README.
+ *
+ * Le fichier est facultatif — sans lui, les compilations de debug marchent
+ * normalement et une compilation de release s'arrête avec un message explicite,
+ * plutôt que de produire un artefact non signé que le Store refusera.
+ */
+def keystorePropertiesFile = rootProject.file('keystore.properties')
+def keystoreProperties = new Properties()
+def hasKeystore = keystorePropertiesFile.exists()
+if (hasKeystore) {
+    keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
+    ['storeFile', 'storePassword', 'keyAlias', 'keyPassword'].each { cle ->
+        if (!keystoreProperties[cle]) {
+            throw new GradleException(
+                "android/keystore.properties : la clé « ${cle} » est absente ou vide.\n" +
+                "Compare avec android/keystore.properties.example."
+            )
+        }
+    }
+    def storeFile = rootProject.file(keystoreProperties['storeFile'])
+    if (!storeFile.exists()) {
+        throw new GradleException(
+            "Keystore introuvable : ${storeFile}\n" +
+            "Le chemin vient de storeFile dans android/keystore.properties, résolu depuis android/."
+        )
+    }
+}
+
+/*
+ * Sans cette garde, `assembleRelease` produirait silencieusement un artefact non
+ * signé, refusé au dépôt — l'erreur n'apparaîtrait qu'au moment d'envoyer le
+ * fichier au Play Store.
+ */
+gradle.taskGraph.whenReady { graph ->
+    def demandee = graph.allTasks.find { ['assembleRelease', 'bundleRelease'].contains(it.name) }
+    if (demandee && !hasKeystore) {
+        throw new GradleException(
+            "Compilation de release demandée (${demandee.name}) sans keystore.\n" +
+            "Crée android/keystore.properties à partir de keystore.properties.example,\n" +
+            "puis génère la clé — voir « Publier sur le Play Store » dans le README."
+        )
+    }
+}
+
 android {
     namespace = "com.devidle.agency"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -16,10 +65,23 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (hasKeystore) {
+            release {
+                storeFile rootProject.file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (hasKeystore) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }
