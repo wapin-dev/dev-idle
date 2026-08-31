@@ -453,6 +453,15 @@ body.game-active #game-screen {
   padding-bottom: 68px;
   background: var(--bg-scene);
 }
+/*
+  Le `!important` ci-dessus bat aussi `[hidden]`. Sans cette règle, le
+  `gameScreen.hidden = true` de game.js n'a aucun effet et l'en-tête et la barre
+  de navigation s'affichent derrière l'écran « nom de l'agence » au premier
+  lancement.
+*/
+body.game-active #game-screen[hidden] {
+  display: none !important;
+}
 /* ----- Barre du haut type "header jeu" : bleu, une ligne, devises + engrenage ----- */
 body.game-active #game-screen .header {
   display: flex;
