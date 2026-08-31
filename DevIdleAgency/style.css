@@ -1568,3 +1568,55 @@ body.tapstorm-theme .modal.modal-popup .levelup-validate-btn:hover:not(:disabled
 .screen.active {
   display: block;
 }
+
+/* ----- Périmètre v1 : contenu annoncé « Bientôt » ----- */
+/* Onglets visibles mais inertes : le cadenas dit l'état, le toast dit quand. */
+body.tapstorm-theme #game-screen .tapstorm-nav .tab-btn.tab-btn-locked {
+  position: relative;
+  opacity: 0.45;
+  cursor: default;
+}
+body.tapstorm-theme #game-screen .tapstorm-nav .tab-btn.tab-btn-locked:active {
+  background: transparent;
+}
+body.tapstorm-theme #game-screen .tapstorm-nav .tab-btn-locked .tab-soon-badge {
+  position: absolute;
+  top: 2px;
+  right: 50%;
+  transform: translateX(150%);
+  font-size: 0.6rem;
+  line-height: 1;
+  pointer-events: none;
+}
+
+body.tapstorm-theme #game-screen .plus-locked-card {
+  text-align: center;
+  opacity: 0.75;
+}
+
+.coming-soon-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(76px + max(14px, env(safe-area-inset-bottom, 0px)));
+  transform: translate(-50%, 8px);
+  z-index: 400;
+  max-width: min(88vw, 340px);
+  padding: 10px 16px;
+  border-radius: 14px;
+  background: rgba(20, 16, 34, 0.96);
+  color: #f2ecff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-align: center;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.coming-soon-toast.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+@media (prefers-reduced-motion: reduce) {
+  .coming-soon-toast { transition: opacity 0.2s ease; transform: translate(-50%, 0); }
+}

@@ -33,6 +33,33 @@
   const OFFLINE_MAX_MS = 8 * 60 * 60 * 1000;
   const OFFLINE_MIN_MS = 60 * 1000;
 
+  /**
+   * Périmètre v1 : le recrutement (Candidats), la gestion d'équipe (Équipe, donc
+   * aussi l'arbre de compétences, les Cadres et les Formations) et les sections
+   * International / Contrats / R&D de l'onglet Plus sont annoncés « Bientôt ».
+   *
+   * Le code de ces systèmes reste en place : il n'est neutralisé qu'ici. Repasser
+   * V1_LOCKS_ENABLED à false rallume l'ensemble sans autre modification.
+   *
+   * Motif : les employés recrutés font doublon avec les upgrades producteurs, et
+   * le contenu tardif est verrouillé par niveau mais tarifé pour le début de
+   * partie — il se débloque déjà payé, donc sans décision de jeu à prendre.
+   */
+  const V1_LOCKS_ENABLED = true;
+  const LOCKED_TABS = ['candidats', 'equipe'];
+  const LOCKED_PLUS_SECTIONS = ['intl', 'contrats', 'rnd'];
+  /** Objectifs dont la cible n'est plus atteignable une fois le verrou posé. */
+  const LOCKED_QUEST_IDS = [
+    'recruit3', 'recruit8', 'recruit15',
+    'managers1', 'managers3', 'training1',
+    'intl1', 'contrat1', 'rnd1',
+  ];
+  /** @param {'candidats'|'equipe'|'intl'|'contrats'|'rnd'} feature */
+  function isFeatureLocked(feature) {
+    if (!V1_LOCKS_ENABLED) return false;
+    return LOCKED_TABS.indexOf(feature) >= 0 || LOCKED_PLUS_SECTIONS.indexOf(feature) >= 0;
+  }
+
   const EMPLOYEE_TYPE_LABELS = { stagiaire: 'Stagiaire', junior: 'Dev junior', senior: 'Dev senior' };
   const EMPLOYEE_TYPE_ICONS = { stagiaire: 'student', junior: 'developer', senior: 'conference-call' };
   const FALLBACK_ICON = '/assets/icons/placeholder.svg';
@@ -281,7 +308,7 @@
     { id: 'recruit3', name: '3 employés recrutés', target: () => (state.employees || []).length >= 3, reward: { xp: 60 } },
     { id: 'recruit8', name: '8 employés recrutés', target: () => (state.employees || []).length >= 8, reward: { xp: 200 } },
     { id: 'recruit15', name: '15 employés recrutés', target: () => (state.employees || []).length >= 15, reward: { xp: 500 } },
-    { id: 'stagiaires5', name: '5 stagiaires (upgrades + recrus)', target: () => (getUpgradeState('stagiaire')?.quantity || 0) + (state.employees || []).filter((e) => e.type === 'stagiaire').length >= 5, reward: { xp: 80 } },
+    { id: 'stagiaires5', name: '5 stagiaires', target: () => (getUpgradeState('stagiaire')?.quantity || 0) + (state.employees || []).filter((e) => e.type === 'stagiaire').length >= 5, reward: { xp: 80 } },
     { id: 'stagiaires15', name: '15 stagiaires', target: () => (getUpgradeState('stagiaire')?.quantity || 0) + (state.employees || []).filter((e) => e.type === 'stagiaire').length >= 15, reward: { xp: 250 } },
     { id: 'managers1', name: 'Premier cadre (manager)', target: () => (state.managers || []).some((m) => m.quantity > 0), reward: { xp: 300 } },
     { id: 'managers3', name: '3 cadres différents', target: () => (state.managers || []).filter((m) => m.quantity > 0).length >= 3, reward: { xp: 800 } },
@@ -301,6 +328,13 @@
     /* Prestige */
     { id: 'prestige1', name: 'Premier prestige', target: () => state.reputation >= 1, reward: { xp: 1500 } },
   ];
+  /**
+   * Les objectifs portant sur du contenu verrouillé sont retirés du jeu : ils
+   * resteraient sinon affichés en permanence, impossibles à valider.
+   */
+  const QUESTS = V1_LOCKS_ENABLED
+    ? QUEST_DEFS.filter(function (q) { return LOCKED_QUEST_IDS.indexOf(q.id) < 0; })
+    : QUEST_DEFS;
   const QUEST_DISPLAY_LIMIT = 5;
 
   const PRESTIGE_BONUSES = [
@@ -498,10 +532,12 @@
   }
 
   function employeeProduction() {
+    if (isFeatureLocked('equipe')) return 0;
     return (state.employees || []).reduce((sum, e) => sum + employeeEffectiveProd(e), 0);
   }
 
   function rollEmployeeErrors() {
+    if (isFeatureLocked('equipe')) return;
     const now = Date.now();
     var errorEmps = [];
     (state.employees || []).forEach((emp) => {
@@ -1130,7 +1166,7 @@
 
   function checkQuests() {
     let completed = false;
-    QUEST_DEFS.forEach((q) => {
+    QUESTS.forEach((q) => {
       if (state.completedQuests.includes(q.id)) return;
       if (q.target()) {
         state.completedQuests.push(q.id);
@@ -1459,7 +1495,7 @@
   }
 
   function renderPendingErrorsBadge() {
-    var count = (state.pendingErrors || []).length;
+    var count = isFeatureLocked('equipe') ? 0 : (state.pendingErrors || []).length;
     var btn = document.getElementById('header-errors-btn');
     var badge = document.getElementById('header-errors-badge');
     var tabBadge = document.getElementById('tab-equipe-errors-badge');
@@ -1484,6 +1520,7 @@
   }
 
   function renderSettingsPendingErrors() {
+    if (isFeatureLocked('equipe')) return;
     var list = document.getElementById('settings-pending-errors-list');
     var emptyEl = document.getElementById('settings-pending-errors-empty');
     var block = document.getElementById('settings-pending-errors-block');
@@ -1540,6 +1577,7 @@
   }
 
   function renderRecruitmentContracts() {
+    if (isFeatureLocked('candidats')) return;
     const container = document.getElementById('recruitment-contracts-list');
     const capEl = document.getElementById('recruitment-cap');
     if (!container) return;
@@ -1599,6 +1637,7 @@
   }
 
   function updateRecruitmentRefreshButton() {
+    if (isFeatureLocked('candidats')) return;
     const btn = document.getElementById('recruitment-refresh-btn');
     if (!btn) return;
     const cost = getRecruitmentRefreshCost();
@@ -1624,6 +1663,7 @@
     if (modal) modal.hidden = true;
   }
   function renderSkillTree() {
+    if (isFeatureLocked('equipe')) return;
     var container = document.getElementById('skill-tree-list');
     if (!container) return;
     container.innerHTML = '';
@@ -1653,6 +1693,7 @@
   }
 
   function renderEmployeesList() {
+    if (isFeatureLocked('equipe')) return;
     var containerSeniors = document.getElementById('employees-list-seniors');
     var containerTeam = document.getElementById('employees-list-team');
     if (!containerSeniors || !containerTeam) return;
@@ -1861,7 +1902,7 @@
     const container = document.getElementById('quests-list');
     if (!container) return;
     container.innerHTML = '';
-    var incomplete = QUEST_DEFS.filter(function (q) { return !state.completedQuests.includes(q.id); });
+    var incomplete = QUESTS.filter(function (q) { return !state.completedQuests.includes(q.id); });
     var toShow = incomplete.slice(0, QUEST_DISPLAY_LIMIT);
     if (toShow.length === 0) {
       var empty = document.createElement('p');
@@ -1883,7 +1924,7 @@
     var list = document.getElementById('all-quests-modal-list');
     if (!list) return;
     list.innerHTML = '';
-    QUEST_DEFS.forEach(function (q) {
+    QUESTS.forEach(function (q) {
       var done = state.completedQuests.includes(q.id);
       var div = document.createElement('div');
       div.className = 'quest-item' + (done ? ' done' : '');
@@ -1907,7 +1948,7 @@
     var list = document.getElementById('settings-all-quests-list');
     if (!list) return;
     list.innerHTML = '';
-    QUEST_DEFS.forEach(function (q) {
+    QUESTS.forEach(function (q) {
       var done = state.completedQuests.includes(q.id);
       var div = document.createElement('div');
       div.className = 'quest-item' + (done ? ' done' : '');
@@ -1922,7 +1963,7 @@
     if (!list) return;
     list.innerHTML = '';
     var completedSet = state.completedQuests || [];
-    var completed = QUEST_DEFS.filter(function (q) { return completedSet.includes(q.id); });
+    var completed = QUESTS.filter(function (q) { return completedSet.includes(q.id); });
     if (emptyEl) emptyEl.hidden = completed.length > 0;
     completed.forEach(function (q) {
       var div = document.createElement('div');
@@ -1966,6 +2007,7 @@
   }
 
   function renderManagers() {
+    if (isFeatureLocked('equipe')) return;
     const container = document.getElementById('managers-list');
     if (!container) return;
     container.innerHTML = '';
@@ -2007,6 +2049,7 @@
   }
 
   function renderIntlOffices() {
+    if (isFeatureLocked('intl')) return;
     const container = document.getElementById('intl-offices-list');
     if (!container) return;
     container.innerHTML = '';
@@ -2028,6 +2071,7 @@
   }
 
   function renderTraining() {
+    if (isFeatureLocked('equipe')) return;
     const container = document.getElementById('training-list');
     if (!container) return;
     container.innerHTML = '';
@@ -2067,6 +2111,7 @@
   }
 
   function renderContrats() {
+    if (isFeatureLocked('contrats')) return;
     const container = document.getElementById('contrats-list');
     if (!container) return;
     container.innerHTML = '';
@@ -2108,6 +2153,7 @@
   }
 
   function updateContratsUI() {
+    if (isFeatureLocked('contrats')) return;
     const container = document.getElementById('contrats-list');
     if (!container) return;
     if (contratsSignature() !== rendered.contrats) {
@@ -2125,6 +2171,7 @@
   }
 
   function renderRnd() {
+    if (isFeatureLocked('rnd')) return;
     const container = document.getElementById('rnd-list');
     if (!container) return;
     container.innerHTML = '';
@@ -2534,6 +2581,78 @@
     }
   }
 
+  var comingSoonTimer = null;
+
+  /**
+   * Un onglet verrouillé reste tapable : sans retour visuel, le joueur croirait
+   * l'appui perdu. On explique au lieu de ne rien faire.
+   */
+  function showComingSoonToast(message) {
+    var el = document.getElementById('coming-soon-toast');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'coming-soon-toast';
+      el.className = 'coming-soon-toast';
+      el.setAttribute('role', 'status');
+      document.body.appendChild(el);
+    }
+    el.textContent = message;
+    el.classList.add('is-visible');
+    if (comingSoonTimer) clearTimeout(comingSoonTimer);
+    comingSoonTimer = setTimeout(function () { el.classList.remove('is-visible'); }, 2200);
+  }
+
+  /** Marque un onglet « Bientôt » : visible, inerte, et qui le dit. */
+  function lockTabButton(btn, tabName) {
+    btn.classList.add('tab-btn-locked');
+    btn.setAttribute('aria-disabled', 'true');
+    var labelEl = btn.querySelector('.nav-label');
+    var label = labelEl ? labelEl.textContent : tabName;
+    // Le libellé « Bientôt » ne tient pas dans un bouton de nav de ~50 px : le
+    // cadenas signale l'état, le toast au clic porte le mot.
+    btn.title = label + ' — bientôt disponible';
+    if (!btn.querySelector('.tab-soon-badge')) {
+      var badge = document.createElement('span');
+      badge.className = 'tab-soon-badge';
+      badge.setAttribute('aria-hidden', 'true');
+      badge.textContent = '🔒';
+      btn.appendChild(badge);
+    }
+    btn.addEventListener('click', function () {
+      showComingSoonToast(label + ' arrive dans une prochaine mise à jour.');
+    });
+  }
+
+  /**
+   * Remplace les sections verrouillées de l'onglet Plus par une seule carte
+   * d'annonce, plutôt que par trois blocs vides.
+   */
+  function lockPlusSections() {
+    var panel = document.getElementById('tab-plus');
+    if (!panel) return;
+    var lockedNames = [];
+    LOCKED_PLUS_SECTIONS.forEach(function (name) {
+      var section = panel.querySelector('.plus-section[data-section="' + name + '"]');
+      if (!section) return;
+      var title = section.querySelector('.panel-title');
+      if (title) lockedNames.push(title.textContent.trim());
+      section.hidden = true;
+    });
+    if (!lockedNames.length || document.getElementById('plus-locked-card')) return;
+    var card = document.createElement('section');
+    card.id = 'plus-locked-card';
+    card.className = 'tapstorm-card plus-locked-card';
+    var h = document.createElement('h2');
+    h.className = 'panel-title';
+    h.textContent = 'Bientôt';
+    var p = document.createElement('p');
+    p.className = 'tab-desc';
+    p.textContent = lockedNames.join(', ') + ' arrivent dans une prochaine mise à jour.';
+    card.appendChild(h);
+    card.appendChild(p);
+    panel.appendChild(card);
+  }
+
   function initTabs() {
     const showTab = (tabName) => {
       document.querySelectorAll('.tab-btn').forEach((b) => b.classList.toggle('active', b.getAttribute('data-tab') === tabName));
@@ -2542,8 +2661,14 @@
       resetRenderCache();
       renderActiveTab();
     };
+    lockPlusSections();
     document.querySelectorAll('.tab-btn').forEach((btn) => {
-      btn.addEventListener('click', () => showTab(btn.getAttribute('data-tab')));
+      const tabName = btn.getAttribute('data-tab');
+      if (isFeatureLocked(tabName)) {
+        lockTabButton(btn, tabName);
+        return;
+      }
+      btn.addEventListener('click', () => showTab(tabName));
     });
     showTab('accueil');
   }
