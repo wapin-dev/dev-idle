@@ -749,6 +749,23 @@ function bootAvecPromo() {
     Object.values(t.SONS).every(f => typeof f === 'function'));
 }
 
+// 43. Pas de tiret cadratin dans les phrases montrées au joueur
+{
+  // Demande du joueur. Le tiret servait de ponctuation dans une trentaine de
+  // textes ; un « — » seul reste permis, il veut dire « rien » dans une colonne
+  // de prix ou un champ vide.
+  const sansCommentaires = src
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
+  const chaines = [...sansCommentaires.matchAll(/'((?:[^'\\]|\\.)*)'/g)].map(m => m[1]);
+  const fautives = chaines.filter(t => t.includes('\u2014') && t.trim() !== '\u2014');
+  check('textes : aucun tiret de phrase dans game.js', [], fautives);
+
+  const dansHtml = [...html.matchAll(/>([^<>]*\u2014[^<>]*)</g)]
+    .map(m => m[1].trim()).filter(t => t !== '\u2014');
+  check('textes : aucun tiret de phrase dans index.html', [], dansHtml);
+}
+
 const echecs = results.filter(r => !r.ok);
 results.forEach(r => console.log((r.ok ? '  OK  ' : ' ÉCHEC') + '  ' + r.nom +
   (r.ok ? '' : `\n         attendu ${JSON.stringify(r.attendu)}, obtenu ${JSON.stringify(r.obtenu)}`)));

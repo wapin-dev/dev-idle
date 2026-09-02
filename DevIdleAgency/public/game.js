@@ -344,7 +344,7 @@
       reward: { clickPower: 1 },
       rewardLabel: '+1 crédit par clic',
       unlocks: ['boutique'],
-      unlockLabel: 'la Boutique — tu peux embaucher',
+      unlockLabel: 'la Boutique : tu peux embaucher',
       unlockShort: 'la Boutique',
     },
     {
@@ -355,7 +355,7 @@
       reward: { prodPercent: 5 },
       rewardLabel: '+5% production',
       unlocks: ['stagiaires'],
-      unlockLabel: 'les promos de stagiaires — 3 candidats, tu en gardes un',
+      unlockLabel: 'les promos de stagiaires : 3 candidats, tu en gardes un',
       unlockShort: 'les promos de stagiaires',
     },
     {
@@ -366,7 +366,7 @@
       reward: { prodPercent: 5 },
       rewardLabel: '+5% production',
       unlocks: ['events'],
-      unlockLabel: 'les événements — hackathons et clients toxiques',
+      unlockLabel: 'les événements : hackathons et clients toxiques',
       unlockShort: 'les événements',
     },
     {
@@ -377,7 +377,7 @@
       reward: { prodPercent: 10 },
       rewardLabel: '+10% production',
       unlocks: ['promotions'],
-      unlockLabel: 'les promotions — fais monter tes devs en grade',
+      unlockLabel: 'les promotions : fais monter tes devs en grade',
       unlockShort: 'les promotions',
     },
     {
@@ -388,7 +388,7 @@
       reward: { prodPercent: 10 },
       rewardLabel: '+10% production',
       unlocks: ['bureaux'],
-      unlockLabel: 'les Bureaux — des locaux qui boostent toute l\'agence',
+      unlockLabel: 'les Bureaux : des locaux qui boostent toute l\'agence',
       unlockShort: 'les Bureaux',
     },
     {
@@ -421,7 +421,7 @@
       reward: { prodPercent: 15 },
       rewardLabel: '+15% production',
       unlocks: ['campus'],
-      unlockLabel: 'le Campus high-tech — et le CTO qui va avec',
+      unlockLabel: 'le Campus high-tech, et le CTO qui va avec',
       unlockShort: 'le Campus',
     },
     {
@@ -880,7 +880,7 @@
       id: 'pepite', label: 'Pépite', weight: 12, symbol: '★',
       prodPercent: 5, hireBonusPercent: 9, costFactor: 4,
       eurekaChance: 0.18, eurekaMultiplier: 6, eurekaMs: 8 * 1000,
-      blurb: 'Produit peu — mais quand ça part, ça part fort.',
+      blurb: 'Produit peu, mais quand ça part, ça part fort.',
     },
   };
 
@@ -1373,7 +1373,7 @@
     renderSkillCard();
     // La présentation explique où aller ; le toast n'a plus qu'à annoncer.
     showHint('competences');
-    showToast('Niveau ' + state.playerLevel + ' — ' +
+    showToast('Niveau ' + state.playerLevel + ' : ' +
       (gagnes > 1 ? gagnes + ' points de compétence' : '1 point de compétence') +
       ' à dépenser.', 3200);
     save();
@@ -1570,7 +1570,7 @@
       playSound('palier');
       vibrate([18, 40, 18]);
       showToast('Palier ! ' + us.quantity + ' ' + def.name.toLowerCase() +
-        's, leur production double — ×' +
+        's, leur production double. ×' +
         producerMilestoneLabel(producerMilestoneMult(us.quantity)) + ' au total.', 4500);
     }
     addXP(price * XP_PER_CREDIT);
@@ -2581,7 +2581,7 @@
     const next = getChapterDef(ch.id + 1);
     const nextEl = document.getElementById('chapter-complete-next');
     if (nextEl) {
-      nextEl.textContent = next ? 'Chapitre ' + next.id + ' · ' + next.name + ' — ' + next.goal.label : '';
+      nextEl.textContent = next ? 'Chapitre ' + next.id + ' · ' + next.name + ' · ' + next.goal.label : '';
       nextEl.hidden = !next;
     }
     modal.hidden = false;
@@ -2630,9 +2630,9 @@
       btn.type = 'button';
       btn.className = 'levelup-choice';
       let desc = opt.name;
-      if (opt.prod) desc += ' — Prod x' + opt.prod + ' pendant ' + (opt.duration || 60) + 's';
-      if (opt.xp) desc += ' — XP x' + opt.xp + ' pendant ' + (opt.duration || 60) + 's';
-      if (opt.credits) desc += ' — Crédits x' + opt.credits + ', prod x' + opt.prod + ' pendant ' + (opt.duration || 60) + 's';
+      if (opt.prod) desc += ' · Prod x' + opt.prod + ' pendant ' + (opt.duration || 60) + 's';
+      if (opt.xp) desc += ' · XP x' + opt.xp + ' pendant ' + (opt.duration || 60) + 's';
+      if (opt.credits) desc += ' · Crédits x' + opt.credits + ', prod x' + opt.prod + ' pendant ' + (opt.duration || 60) + 's';
       btn.textContent = desc;
       btn.addEventListener('click', () => chooseAgencyEventOption(ev, opt));
       container.appendChild(btn);
@@ -2713,7 +2713,7 @@
       var div = document.createElement('div');
       div.className = 'settings-pending-error-item';
       var name = rec.employeeName + ' (' + (EMPLOYEE_TYPE_LABELS[rec.employeeType] || rec.employeeType) + ')';
-      var detail = rec.impactDetail ? ' — ' + rec.impactDetail : '';
+      var detail = rec.impactDetail ? ' · ' + rec.impactDetail : '';
       div.innerHTML =
         '<div class="settings-pending-error-head">' +
         '<span class="settings-pending-error-name">' + escapeHtml(name) + '</span>' +
@@ -2917,9 +2917,9 @@
       });
       var buyUpgradesHtml = availableUpgrades.length > 0 ? '<div class="employee-detail-line employee-detail-buy-upgrades"><span class="employee-detail-label">Attribuer une compétence:</span><div class="employee-upgrade-buttons">' +
         availableUpgrades.map(function (u) {
-          return '<button type="button" class="tapstorm-btn tapstorm-btn-secondary btn-employee-upgrade" data-emp-id="' + escapeHtml(emp.id) + '" data-upgrade-id="' + escapeHtml(u.id) + '" title="' + escapeHtml(u.desc) + '">' + escapeHtml(u.name) + ' — Attribuer</button>';
+          return '<button type="button" class="tapstorm-btn tapstorm-btn-secondary btn-employee-upgrade" data-emp-id="' + escapeHtml(emp.id) + '" data-upgrade-id="' + escapeHtml(u.id) + '" title="' + escapeHtml(u.desc) + '">' + escapeHtml(u.name) + ' · Attribuer</button>';
         }).join('') + '</div></div>' : '';
-      var mentorPenaltyDetail = hasMentorPenalty ? '<div class="employee-detail-line employee-detail-mentor-penalty"><span class="employee-detail-label">Pénalité:</span> ' + (causedByName ? escapeHtml(causedByName) + ' a fait une erreur pardonnée — ' : 'Un mentoré a été pardonné — ') + mentorPenaltySec + ' s restantes</div>' : '';
+      var mentorPenaltyDetail = hasMentorPenalty ? '<div class="employee-detail-line employee-detail-mentor-penalty"><span class="employee-detail-label">Pénalité:</span> ' + (causedByName ? escapeHtml(causedByName) + ' a fait une erreur pardonnée, ' : 'Un mentoré a été pardonné, ') + mentorPenaltySec + ' s restantes</div>' : '';
       var menteesList = (emp.menteesIds || []).map(function (mid) {
         var m = getEmployee(mid);
         if (!m) return null;
@@ -3426,7 +3426,7 @@
       '<span class="intern-stat"><b>+' + c.prodPercent + '%</b> production</span>' +
       '<span class="intern-stat' + (c.eurekaChance > 0 ? ' intern-stat-eureka' : '') + '">' + eureka + '</span>' +
       '<span class="intern-stat"><b>+' + c.hireBonusPercent + '%</b> définitif si embauché</span>' +
-      (trait ? '<span class="intern-trait">' + escapeHtml(trait.name) + ' — ' + escapeHtml(trait.desc) + '</span>' : '') +
+      (trait ? '<span class="intern-trait">' + escapeHtml(trait.name) + ' : ' + escapeHtml(trait.desc) + '</span>' : '') +
       '</div>';
   }
 
@@ -3496,7 +3496,7 @@
         // Pas de bannière pour un profil qui ne déclenchera jamais d'Eurêka :
         // elle afficherait « production x1 ».
         (c.eurekaChance > 0
-          ? '<div class="intern-eureka-banner" id="intern-eureka-banner" hidden>⚡ EURÊKA — production x' + c.eurekaMultiplier + '</div>'
+          ? '<div class="intern-eureka-banner" id="intern-eureka-banner" hidden>⚡ EURÊKA · production x' + c.eurekaMultiplier + '</div>'
           : '');
       updateInternTimer();
       return;
@@ -3682,11 +3682,11 @@
     },
     stagiaires: {
       titre: 'Une promo se présente',
-      texte: 'Trois candidats, tu n\'en gardes qu\'un — les autres partent. Regarde autant leur trait que leur rareté : un bon trait vaut une rareté de plus.',
+      texte: 'Trois candidats, tu n\'en gardes qu\'un, les autres partent. Regarde autant leur trait que leur rareté : un bon trait vaut une rareté de plus.',
     },
     eureka: {
       titre: 'C\'était un Eurêka',
-      texte: 'Ton stagiaire vient de multiplier toute la production de l\'agence pendant quelques secondes. Seuls les profils rares en déclenchent — c\'est ce qu\'on paie en les choisissant.',
+      texte: 'Ton stagiaire vient de multiplier toute la production de l\'agence pendant quelques secondes. Seuls les profils rares en déclenchent : c\'est ce qu\'on paie en les choisissant.',
     },
     decision: {
       titre: 'Le stage est fini',
@@ -3698,11 +3698,11 @@
     },
     events: {
       titre: 'Un événement',
-      texte: 'Ça dure quelques secondes et ça change ta production. Les mauvais peuvent être réglés tout de suite contre des crédits — ou simplement encaissés.',
+      texte: 'Ça dure quelques secondes et ça change ta production. Les mauvais peuvent être réglés tout de suite contre des crédits, ou simplement encaissés.',
     },
     prestige: {
       titre: 'Le Rebranding est ouvert',
-      texte: 'Il remet tes producteurs et ton niveau à zéro. Mais tu gardes tes chapitres, ton arbre de compétences et ta réputation — c\'est ce qui te fait repartir bien plus vite.',
+      texte: 'Il remet tes producteurs et ton niveau à zéro. Mais tu gardes tes chapitres, ton arbre de compétences et ta réputation : c\'est ce qui te fait repartir bien plus vite.',
     },
   };
 
@@ -3931,7 +3931,7 @@
       hireBtn.classList.toggle('too-expensive', !affordable);
     }
     setText('intern-end-hint', affordable
-      ? 'Le laisser partir ne coûte rien — mais tout ce qu\'il apportait s\'en va avec lui.'
+      ? 'Le laisser partir ne coûte rien, mais tout ce qu\'il apportait s\'en va avec lui.'
       : 'Il te manque ' + formatNumber(cost - Math.floor(state.credits)) + ' crédits. Tu peux continuer à jouer : la décision t\'attend.');
     modal.hidden = false;
   }
@@ -4108,7 +4108,7 @@
         // compris — sinon le chiffre de la carte contredit celui du bandeau.
         const mult = producerMilestoneMult(quantity);
         desc += ' (' + formatNumber(def.production * mult) + '/s chacun' +
-          (mult > 1 ? ' — ' + producerMilestoneLabel(mult) + '× grâce aux paliers' : '') + ')';
+          (mult > 1 ? ', ' + producerMilestoneLabel(mult) + '× grâce aux paliers' : '') + ')';
       }
       if (def.type === 'multiplier') desc += ' (+' + ((def.multiplier || 0) * 100) + '% par unité)';
       html += '<span class="name">' + escapeHtml(def.name) + '</span><span class="desc">' + escapeHtml(desc) + '</span><div class="row"><span class="count">Possédés : ' + quantity + '</span><span class="price' + (affordable ? '' : ' too-expensive') + '">' + formatNumber(price) + ' crédits</span></div>';
@@ -4472,7 +4472,7 @@
     const headstartPct = (state.prestigeBonuses && state.prestigeBonuses.headstartPercent) || 0;
     const txt = can
       ? 'Repars de zéro et gagne ' + formatNumber(Math.floor(Math.sqrt(state.credits / PRESTIGE_THRESHOLD))) + ' Réputation. '
-        + 'Tu perds tes crédits, tes achats, ton niveau et ton XP' + (headstartPct > 0 ? ' — tu gardes ' + headstartPct + '% de tes crédits' : '')
+        + 'Tu perds tes crédits, tes achats, ton niveau et ton XP' + (headstartPct > 0 ? ', tu gardes ' + headstartPct + '% de tes crédits' : '')
         + '. Tu gardes ta Réputation, ses bonus et tes chapitres.'
       : 'Atteins ' + formatNumber(PRESTIGE_THRESHOLD) + ' crédits pour débloquer le Rebranding.';
     if (can === rendered.prestigeCan && txt === rendered.prestigeDesc) return;
@@ -4613,7 +4613,7 @@
     const detailEl = document.getElementById('offline-detail');
     if (amountEl) amountEl.textContent = '+' + formatNumber(report.gain) + ' crédits';
     if (detailEl) {
-      let txt = 'Absence de ' + formatDuration(report.elapsedMs / 1000) + ' — ton agence a tourné à ' + Math.round(OFFLINE_RATE * 100) + ' % de son rendement';
+      let txt = 'Absence de ' + formatDuration(report.elapsedMs / 1000) + ', ton agence a tourné à ' + Math.round(OFFLINE_RATE * 100) + ' % de son rendement';
       if (report.capped) txt += ', plafonné à ' + Math.round(report.capHours) + ' h';
       detailEl.textContent = txt + '.';
     }
