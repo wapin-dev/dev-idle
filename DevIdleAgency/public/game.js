@@ -162,8 +162,9 @@
 
   /**
    * Périmètre v1 : le recrutement (Candidats), la gestion d'équipe (Équipe, donc
-   * aussi l'arbre de compétences, les Cadres et les Formations) et les sections
-   * International / Contrats / R&D de l'onglet Plus sont annoncés « Bientôt ».
+   * les Cadres et les Formations) et les sections International / Contrats / R&D
+   * de l'onglet Plus sont annoncés « Bientôt ». L'arbre de compétences, lui, a
+   * quitté l'onglet Équipe : il est au cœur de la v1, ouvert par un chapitre.
    *
    * Le code de ces systèmes reste en place : il n'est neutralisé qu'ici. Repasser
    * V1_LOCKS_ENABLED à false rallume l'ensemble sans autre modification.
@@ -983,7 +984,6 @@
     /** Nombre d'achats par bonus de la boutique Réputation (ils sont répétables). */
     prestigeBonusLevels: {},
     agencyName: 'Mon Agence',
-    themeColor: 'default',
     bestRunCredits: 0,
     agencyEventChoice: null,
     agencyEventEndsAt: 0,
@@ -995,7 +995,6 @@
     activeErrorImpacts: [],
     currentErrorRecord: null,
     errorModalFromPending: false,
-    lastContractRefreshAt: 0,
   };
 
   let lastTick = 0;
@@ -1057,7 +1056,6 @@
     while (state.recruitmentContracts.length < RECRUITMENT_POOL_SIZE) {
       state.recruitmentContracts.push(generateOneContract());
     }
-    state.lastContractRefreshAt = Date.now();
   }
 
   function createEmployeeFromContract(contract) {
@@ -2345,10 +2343,8 @@
         recruitmentContracts: state.recruitmentContracts,
         employees: state.employees,
         nextErrorRollAt: state.nextErrorRollAt,
-        lastContractRefreshAt: state.lastContractRefreshAt,
         pendingErrors: state.pendingErrors,
         activeErrorImpacts: state.activeErrorImpacts,
-        themeColor: state.themeColor,
         lastSave: savedAt,
         save_version: SAVE_VERSION,
       };
@@ -2545,7 +2541,6 @@
       });
       if (typeof data.nextErrorRollAt === 'number') state.nextErrorRollAt = data.nextErrorRollAt;
       else state.nextErrorRollAt = Date.now() + ERROR_ROLL_INTERVAL_MS;
-      if (typeof data.lastContractRefreshAt === 'number') state.lastContractRefreshAt = data.lastContractRefreshAt;
       if (Array.isArray(data.pendingErrors)) state.pendingErrors = data.pendingErrors;
       else state.pendingErrors = state.pendingErrors || [];
       if (Array.isArray(data.activeErrorImpacts)) state.activeErrorImpacts = data.activeErrorImpacts.filter(function (a) { return a.until > Date.now(); });
@@ -2554,7 +2549,6 @@
       if (typeof data.agencyName === 'string' && data.agencyName.trim()) {
         state.agencyName = data.agencyName.trim().slice(0, 40);
       }
-      if (data.themeColor) state.themeColor = data.themeColor;
       // Borné à maintenant : un lastSave venu d'un appareil à l'horloge en avance
       // rendrait (Date.now() - lastSave) négatif et gèlerait l'autosave de la boucle.
       if (typeof data.lastSave === 'number') state.lastSave = Math.min(data.lastSave, Date.now());
