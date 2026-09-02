@@ -46,7 +46,10 @@ function instrument(version) {
     "    isFeatureUnlocked, catchUpChapters, getChapterProgress, CHAPTERS,\n" +
     "    openInternDraft, chooseInternCandidate, hireIntern, releaseIntern,\n" +
     "    getProductionPerSecond, getInternProdPercent, isEurekaActive, isInternStageOver,\n" +
-    "    tickInterns, INTERN_RARITIES, INTERN_TRAITS, INTERN_DRAFT_SIZE };\n})();");
+    "    tickInterns, INTERN_RARITIES, INTERN_TRAITS, INTERN_DRAFT_SIZE,\n" +
+    "    producerMilestoneLevel, producerMilestoneMult, producerMilestoneRemaining,\n" +
+    "    PRODUCER_MILESTONE_STEP, INTERN_COOLDOWN_MS, INTERN_STAGE_MS,\n" +
+    "    buyUpgrade, getUpgradeState, ensureUpgrade };\n})();");
 }
 
 function boot(seed, { migrations = null, version = undefined } = {}) {
@@ -398,6 +401,53 @@ function bootAvecPromo() {
   check('rechargement : stagiaire restauré', choisi.id, t.state.intern.id);
   check('rechargement : embauches restaurées', 2, t.state.internsHired);
   check('rechargement : Eurêka non repris', false, t.isEurekaActive());
+}
+
+// 25. Paliers de producteur : x2 tous les 25, et la production suit
+{
+  const { t } = boot(undefined);
+  const PAS = t.PRODUCER_MILESTONE_STEP;
+  check('palier : pas de 25', 25, PAS);
+  check('palier : 0 possédé -> x1', 1, t.producerMilestoneMult(0));
+  check('palier : 24 possédés -> x1', 1, t.producerMilestoneMult(24));
+  check('palier : 25 possédés -> x2', 2, t.producerMilestoneMult(25));
+  check('palier : 110 possédés -> x16', 16, t.producerMilestoneMult(110));
+  check('palier : reste 1 à 24 possédés', 1, t.producerMilestoneRemaining(24));
+  // Juste après un palier, il faut de nouveau le pas complet.
+  check('palier : reste 25 à 25 possédés', 25, t.producerMilestoneRemaining(25));
+
+  // La production doit réellement doubler au passage du palier, pas seulement
+  // s'afficher : c'est tout l'intérêt du système.
+  t.ensureUpgrade('stagiaire');
+  t.getUpgradeState('stagiaire').quantity = 24;
+  const avant = t.getProductionPerSecond();
+  t.getUpgradeState('stagiaire').quantity = 25;
+  const apres = t.getProductionPerSecond();
+  // 24 -> 25 : +1 unité (x25/24) ET le palier (x2), donc ~x2,08.
+  check('palier : la production double au franchissement', true,
+    Math.abs(apres / avant - (25 / 24) * 2) < 0.001);
+}
+
+// 26. Une fin de stage n'ouvre plus de modale d'elle-même
+{
+  const { t, window } = bootAvecPromo();
+  t.chooseInternCandidate(t.state.internDraft.candidates[0].id);
+  t.state.intern.endsAt = Date.now() - 1;
+  t.tickInterns();
+  const modale = window.document.getElementById('intern-end-modal');
+  check('fin de stage : la modale reste fermée', true, modale.hidden);
+  check('fin de stage : la carte passe en décision', 'decision',
+    window.document.getElementById('intern-card').getAttribute('data-mode'));
+  check('fin de stage : le stagiaire attend toujours', true, !!t.state.intern);
+}
+
+// 27. Le battement entre deux promos laisse respirer
+{
+  const { t } = boot(undefined);
+  // Un cycle complet = stage + battement. En dessous de 5 min, le jeu réclame
+  // l'attention du joueur trop souvent pour ce que le stagiaire rapporte.
+  const cycleMin = (t.INTERN_STAGE_MS + t.INTERN_COOLDOWN_MS) / 60000;
+  check('promos : cycle d\'au moins 5 min', true, cycleMin >= 5);
 }
 
 const echecs = results.filter(r => !r.ok);

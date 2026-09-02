@@ -466,6 +466,35 @@
     { id: 'serveur', name: 'Serveur', desc: 'Ça tourne. Enfin normalement.', basePrice: 500, priceGrowth: 1.2, multiplier: 0.5, type: 'multiplier' },
   ];
 
+  /**
+   * Paliers de producteur : tous les 25 possédés, ce producteur double sa
+   * production. C'est ce qui manquait pour que la quantité veuille dire quelque
+   * chose — sans eux le 87ᵉ développeur est identique au 86ᵉ, et les achats de
+   * fin de partie ne sont plus que du remplissage.
+   *
+   * Mesuré sur l'économie réelle : 26,2 M gagnés en 3 h sans, 102,1 M avec, et
+   * surtout le jalon des 10 M passe de 98 min à 54 min. Le début de partie ne
+   * bouge pas (5,6 K → 5,8 K sur les dix premières minutes) : c'est la fin de
+   * courbe, qui s'écrasait, que les paliers redressent.
+   *
+   * Plafonner les achats — la réaction naturelle devant « on peut en acheter
+   * trop » — aurait au contraire supprimé la boucle centrale du jeu.
+   */
+  const PRODUCER_MILESTONE_STEP = 25;
+
+  function producerMilestoneLevel(quantity) {
+    return Math.floor((quantity || 0) / PRODUCER_MILESTONE_STEP);
+  }
+
+  function producerMilestoneMult(quantity) {
+    return Math.pow(2, producerMilestoneLevel(quantity));
+  }
+
+  /** Combien il en reste à acheter avant le palier suivant. */
+  function producerMilestoneRemaining(quantity) {
+    return PRODUCER_MILESTONE_STEP - ((quantity || 0) % PRODUCER_MILESTONE_STEP);
+  }
+
   const MANAGER_DEFS = [
     { id: 'chefProjet', name: 'Chef de projet', desc: '+2% prod par chef sur tous les employés. Gère les specs.', levelReq: 20, basePrice: 50000, priceGrowth: 1.25, prodBonusPerUnit: 0.02, maxQty: 10 },
     { id: 'directeurTech', name: 'Directeur technique (CTO)', desc: 'x1.1 multiplicateur global sur la prod. Vision stratégique.', levelReq: 40, basePrice: 500000, priceGrowth: 1.3, globalMultiplier: 0.1, maxQty: 5 },
@@ -627,7 +656,14 @@
   const INTERN_DRAFT_SIZE = 3;
   const INTERN_STAGE_MS = 3 * 60 * 1000;
   /** Délai avant la promo suivante, une fois la décision de fin de stage prise. */
-  const INTERN_COOLDOWN_MS = 30 * 1000;
+  /**
+   * Battement entre la fin d'un stage et la promo suivante. Il était de 30 s :
+   * avec un stage de 3 min, le cycle complet tombait à 3 min 30, et le jeu
+   * réclamait donc l'attention du joueur toutes les 3 min 30 pour un stagiaire
+   * qui vaut en moyenne x1,20 à x1,39 de production. Un idle se joue par coups
+   * d'œil ; à 3 min on double le cycle sans rien retirer au système.
+   */
+  const INTERN_COOLDOWN_MS = 3 * 60 * 1000;
   const INTERN_EUREKA_ROLL_MS = 20 * 1000;
   /** Plancher du coût d'embauche, pour que le tout début de partie reste jouable. */
   const INTERN_HIRE_COST_MIN = 250;
@@ -1197,7 +1233,7 @@
       const us = getUpgradeState(def.id);
       if (!us) return;
       if (def.type === 'producer') {
-        let prod = (def.production || 0) * us.quantity;
+        let prod = (def.production || 0) * us.quantity * producerMilestoneMult(us.quantity);
         if (def.id === 'stagiaire' && mentorBonus > 0) prod *= 1 + mentorBonus;
         if ((def.id === 'dev' || def.id === 'devSenior') && agileBonus > 0) prod *= 1 + agileBonus;
         total += prod;
@@ -1206,7 +1242,7 @@
     });
 
     const ctoUs = getUpgradeState('cto');
-    if (ctoUs) total += 20 * ctoUs.quantity;
+    if (ctoUs) total += 20 * ctoUs.quantity * producerMilestoneMult(ctoUs.quantity);
 
     total *= multiplier;
 
@@ -1300,7 +1336,14 @@
     const price = getPrice(def, us.quantity);
     if (!canAfford(price)) return;
     state.credits -= price;
+    const paliersAvant = producerMilestoneLevel(us.quantity);
     us.quantity += 1;
+    // Un palier franchi est un vrai moment : il double la production de ce
+    // producteur. Sans annonce, le joueur voit juste un chiffre bouger.
+    if (def.type === 'producer' && producerMilestoneLevel(us.quantity) > paliersAvant) {
+      showToast(us.quantity + ' ' + def.name.toLowerCase() + 's — palier atteint, leur production passe à ×' +
+        producerMilestoneMult(us.quantity) + '.', 4000);
+    }
     addXP(price * XP_PER_CREDIT);
     renderUpgrades();
     if (id === 'devSenior') renderRecruitmentContracts();
@@ -1751,7 +1794,10 @@
         state.intern.endAnnounced = true;
         save();
         renderIntern();
-        showInternEndModal();
+        // La modale ne s'ouvre plus d'elle-même : c'était la seule interruption
+        // forcée du jeu, et elle tombait à chaque fin de stage. La carte
+        // d'accueil passe en mode « décision » et attend — elle n'expire jamais.
+        showToast('Le stage de ' + state.intern.name + ' est terminé. À toi de décider.', 4000);
       }
       return;
     }
@@ -2873,6 +2919,22 @@
       '</g></g></g>';
   }
 
+  /**
+   * Le palier atteint par un métier, en tête de sa rangée.
+   *
+   * Pastille pleine à texte sombre, à l'inverse de celle du dépassement (fond
+   * sombre, texte coloré) : les deux affichent « ×N » dans la même rangée mais
+   * ne veulent pas dire la même chose — un multiplicateur ici, un nombre de
+   * postes non dessinés là. Sur la rangée des seniors, toutes deux dorées, la
+   * couleur seule ne suffisait pas à les distinguer.
+   */
+  function sceneMilestone(x, y, mult) {
+    return '<g class="agency-unit" transform="translate(' + x + ',' + y + ')">' +
+      '<rect x="1" y="-24" width="28" height="16" rx="8" fill="#fbbf24"/>' +
+      '<text x="15" y="-13" text-anchor="middle" class="agency-count" fill="#2a1f05">×' + mult + '</text>' +
+      '</g>';
+  }
+
   /** La pastille qui remplace les postes non dessinés. */
   function sceneOverflow(x, y, n, color) {
     return '<g transform="translate(' + x + ',' + y + ')">' +
@@ -3051,9 +3113,15 @@
       const dessines = Math.min(n, n > SCENE_MAX_SLOTS ? SCENE_MAX_SLOTS - 1 : SCENE_MAX_SLOTS);
       // La rangée est centrée entre les marges : alignée à gauche, trois postes
       // se tassaient dans un coin avec une pièce vide à côté.
-      const cases = dessines + (n > SCENE_MAX_SLOTS ? 1 : 0);
+      // Le palier prend une case à gauche de la rangée, comptée dans le
+      // centrage : sinon la pastille pousse les postes hors de la marge.
+      const mult = producerMilestoneMult(n);
+      const casePalier = mult > 1 ? 1 : 0;
+      const cases = dessines + (n > SCENE_MAX_SLOTS ? 1 : 0) + casePalier;
       const x0 = xMin + Math.max(0, ((xMax - xMin) - cases * SCENE_PITCH) / 2);
       let g = '';
+      if (casePalier) g += sceneMilestone(x0, y, mult);
+      const xPostes = x0 + casePalier * SCENE_PITCH;
       for (let k = 0; k < dessines; k++) {
         // Nouveau = ce poste n'était pas là la dernière fois que le joueur a
         // regardé. Le décalage fait entrer les postes l'un après l'autre quand
@@ -3062,10 +3130,10 @@
         // Tempo propre à chaque poste : sans décalage, toute la pièce pianote
         // en cadence et la scène a l'air mécanique.
         const tempo = (i * 313 + k * 137) % 900;
-        g += sceneDesk(x0 + k * SCENE_PITCH, y, row, nouveau, (k - deja) * 70, tempo);
+        g += sceneDesk(xPostes + k * SCENE_PITCH, y, row, nouveau, (k - deja) * 70, tempo);
       }
       if (n > SCENE_MAX_SLOTS) {
-        g += sceneOverflow(x0 + dessines * SCENE_PITCH, y, n - dessines, row.color);
+        g += sceneOverflow(xPostes + dessines * SCENE_PITCH, y, n - dessines, row.color);
       }
       corps += '<g opacity="' + row.depth + '">' + g + '</g>';
     });
@@ -3450,9 +3518,28 @@
       card.className = 'upgrade-card-wrapper';
       let html = '<button type="button" class="upgrade-card" data-upgrade="' + def.id + '"' + (affordable ? '' : ' disabled') + '>';
       let desc = def.desc;
-      if (def.type === 'producer') desc += ' (' + formatNumber(def.production) + '/s chacun)';
+      if (def.type === 'producer') {
+        // La production affichée est celle qu'ils rendent vraiment, paliers
+        // compris — sinon le chiffre de la carte contredit celui du bandeau.
+        const mult = producerMilestoneMult(quantity);
+        desc += ' (' + formatNumber(def.production * mult) + '/s chacun' +
+          (mult > 1 ? ', palier ×' + mult : '') + ')';
+      }
       if (def.type === 'multiplier') desc += ' (+' + ((def.multiplier || 0) * 100) + '% par unité)';
-      html += '<span class="name">' + escapeHtml(def.name) + '</span><span class="desc">' + escapeHtml(desc) + '</span><div class="row"><span class="count">Possédés : ' + quantity + '</span><span class="price' + (affordable ? '' : ' too-expensive') + '">' + formatNumber(price) + ' crédits</span></div></button>';
+      html += '<span class="name">' + escapeHtml(def.name) + '</span><span class="desc">' + escapeHtml(desc) + '</span><div class="row"><span class="count">Possédés : ' + quantity + '</span><span class="price' + (affordable ? '' : ' too-expensive') + '">' + formatNumber(price) + ' crédits</span></div>';
+      // Le prochain palier, en barre et en chiffres : c'est lui qui donne une
+      // raison d'acheter le 87ᵉ développeur plutôt que de s'arrêter au 86ᵉ.
+      if (def.type === 'producer') {
+        const reste = producerMilestoneRemaining(quantity);
+        const avance = PRODUCER_MILESTONE_STEP - reste;
+        html += '<div class="upgrade-milestone">' +
+          '<div class="upgrade-milestone-bar"><span style="width:' +
+            Math.round((avance / PRODUCER_MILESTONE_STEP) * 100) + '%"></span></div>' +
+          '<span class="upgrade-milestone-label">Encore <b>' + reste + '</b> pour le palier ×' +
+            (producerMilestoneMult(quantity) * 2) + '</span>' +
+          '</div>';
+      }
+      html += '</button>';
       if (def.promoteTo && isFeatureUnlocked('promotions') && us.quantity >= (def.promoteCost || 10)) {
         const toDef = getUpgradeDef(def.promoteTo);
         html += '<button type="button" class="promote-btn" data-from="' + def.id + '" data-to="' + def.promoteTo + '">Promouvoir 10 → 1 ' + (toDef ? toDef.name : '') + '</button>';

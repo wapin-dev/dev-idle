@@ -655,6 +655,22 @@ body.game-active #game-screen #upgrades-list .upgrade-card[data-upgrade="dev"]::
 body.game-active #game-screen #upgrades-list .upgrade-card[data-upgrade="devSenior"]::before { content: '🧑‍💼'; }
 body.game-active #game-screen #upgrades-list .upgrade-card[data-upgrade="serveur"]::before { content: '🖥️'; }
 body.game-active #game-screen #upgrades-list .upgrade-card[data-upgrade="cto"]::before { content: '👔'; }
+/* La carte est une grille 3 colonnes x 2 rangées (icône | texte | prix). Sans
+   placement explicite, le bloc du palier se rangeait tout seul en colonne 1
+   d'une 3e rangée : une barre de 4 px de large et un libellé sur trois lignes.
+   Il lui faut la largeur entière, sous le reste. */
+body.game-active #game-screen #upgrades-list .upgrade-card .upgrade-milestone {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  margin-top: 6px;
+}
+body.game-active #game-screen #upgrades-list .upgrade-card .upgrade-milestone-label {
+  display: block;
+  margin-top: 5px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #fbbf24;
+}
 body.game-active #game-screen #upgrades-list .upgrade-card:hover:not(.disabled) {
   transform: translateY(-2px);
   box-shadow: 0 8px 20px rgba(0,0,0,0.12);

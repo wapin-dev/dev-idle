@@ -2060,3 +2060,32 @@ body.eureka-active #agency-scene .agency-typing {
 @media (prefers-reduced-motion: reduce) {
   .click-particle { display: none; }
 }
+
+/* ===== Prochain palier, dans la boutique ================================== */
+.upgrade-milestone {
+  display: block;
+  margin-top: 8px;
+}
+
+.upgrade-milestone-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.09);
+  overflow: hidden;
+}
+
+.upgrade-milestone-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+  transition: width 0.25s ease-out;
+}
+
+.upgrade-milestone-label {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #fbbf24;
+}
