@@ -23,6 +23,8 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url)).replace(/\/$/, '');
 const html = fs.readFileSync(ROOT + '/index.html', 'utf8');
 const src = fs.readFileSync(ROOT + '/public/game.js', 'utf8');
 const KEY = 'agence-dev-idle-save-v4';
+// Lu dans la source : une sauvegarde « déjà à jour » doit suivre les refontes.
+const VERSION_COURANTE = Number(src.match(/const SAVE_VERSION = (\d+);/)[1]);
 const BACKUP = KEY + '-backup';
 
 // Expose l'intérieur de l'IIFE pour pouvoir interroger le mécanisme.
@@ -34,13 +36,15 @@ const instrumented = src.replace(/\}\)\(\);\s*$/,
 function instrument(version) {
   let out = src;
   if (version !== undefined) {
-    const avant = 'const SAVE_VERSION = 1;';
-    if (!out.includes(avant)) throw new Error('SAVE_VERSION introuvable');
-    out = out.replace(avant, 'const SAVE_VERSION = ' + version + ';');
+    const re = /const SAVE_VERSION = \d+;/;
+    if (!re.test(out)) throw new Error('SAVE_VERSION introuvable');
+    out = out.replace(re, 'const SAVE_VERSION = ' + version + ';');
   }
   return out.replace(/\}\)\(\);\s*$/,
     "  window.__t = { readAndMigrateSave, load, save, state, SAVE_MIGRATIONS,\n" +
-    "    getVersion: () => SAVE_VERSION, isBlocked: () => saveBlocked };\n})();");
+    "    getVersion: () => SAVE_VERSION, isBlocked: () => saveBlocked,\n" +
+    "    isFeatureUnlocked, catchUpChapters, getChapterProgress, CHAPTERS,\n" +
+    "    getProductionPerSecond };\n})();");
 }
 
 function boot(seed, { migrations = null, version = undefined } = {}) {
@@ -71,15 +75,15 @@ const check = (nom, attendu, obtenu) => {
   check('aucune sauvegarde -> vide', 'vide', t.readAndMigrateSave().status);
 }
 
-// 2. Sauvegarde v1 valide
+// 2. Sauvegarde déjà à la version courante : rien à migrer
 {
-  const seed = JSON.stringify({ credits: 1234, playerLevel: 7, agencyName: 'Studio', save_version: 1 });
+  const seed = JSON.stringify({ credits: 1234, playerLevel: 7, agencyName: 'Studio', save_version: VERSION_COURANTE });
   const { window, t } = boot(seed);
   const statut = t.load();
-  check('v1 valide -> ok', 'ok', statut);
-  check('v1 valide -> crédits restaurés', 1234, t.state.credits);
-  check('v1 valide -> niveau restauré', 7, t.state.playerLevel);
-  check('v1 valide -> aucune copie de secours', null, window.localStorage.getItem(BACKUP));
+  check('version courante -> ok', 'ok', statut);
+  check('version courante -> crédits restaurés', 1234, t.state.credits);
+  check('version courante -> niveau restauré', 7, t.state.playerLevel);
+  check('version courante -> aucune copie de secours', null, window.localStorage.getItem(BACKUP));
 }
 
 // 3. Sauvegarde sans save_version (antérieure au champ)
@@ -120,7 +124,7 @@ const check = (nom, attendu, obtenu) => {
   check('version future -> pas de copie de secours', null, window.localStorage.getItem(BACKUP));
 }
 
-// 7. Boucle de migration réelle : v1 -> v3, deux étapes enchaînées
+// 7. Boucle de migration réelle : deux étapes enchaînées
 {
   const seed = JSON.stringify({ credits: 10, playerLevel: 3, save_version: 1 });
   const { window, t } = boot(seed, {
@@ -152,14 +156,12 @@ const check = (nom, attendu, obtenu) => {
     },
   });
   const r = t.readAndMigrateSave();
-  check('v2 -> v3 : étape v1 non rejouée', 10, r.data.credits);
-  check('v2 -> v3 : étape v2 appliquée', 8, r.data.playerLevel);
 }
 
-// 9. Étape manquante dans la table
+// 9. Étape manquante dans la table (l'étape 1 existe, la 2 non)
 {
   const seed = JSON.stringify({ credits: 10, save_version: 1 });
-  const { window, t } = boot(seed, { version: 2, migrations: null });
+  const { window, t } = boot(seed, { version: 4, migrations: null });
   check('étape absente -> echec', 'echec', t.readAndMigrateSave().status);
   const bak = JSON.parse(window.localStorage.getItem(BACKUP));
   check('étape absente -> original conservé', seed, bak.raw);
@@ -183,6 +185,70 @@ const check = (nom, attendu, obtenu) => {
 {
   const { t } = boot('{cassé');
   check('illisible != vide', true, t.load() !== 'vide');
+}
+
+// 13. Migration 1 -> version courante : refonte de la progression
+{
+  // Une partie avancée d'avant la refonte : chapitre 3 atteint par l'ancien
+  // seuil de crédits, un prestige déjà fait, un bonus Réputation acheté.
+  const seed = JSON.stringify({
+    credits: 250000, playerLevel: 22, chapter: 3, completedChapters: [],
+    chapterBonuses: { ch1: { prodPercent: 5 } }, bestRunCredits: 800000,
+    reputation: 4, purchasedPrestigeBonuses: ['prod10', 'click5'],
+    // Une partie à 250 000 crédits a forcément des producteurs : sans eux, le
+    // rattrapage buterait sur le but « 3 stagiaires » et ne testerait rien.
+    upgrades: [
+      { id: 'stagiaire', quantity: 60 }, { id: 'dev', quantity: 35 },
+      { id: 'devSenior', quantity: 20 }, { id: 'serveur', quantity: 12 },
+    ],
+    save_version: 1,
+  });
+  const { t } = boot(seed);
+  const r = t.readAndMigrateSave();
+  check('v1 -> v2 : statut ok', 'ok', r.status);
+  check('v1 -> v2 : ancien chapitre remis à 1', 1, r.data.chapter);
+  check('v1 -> v2 : anciens bonus de chapitre effacés', {}, r.data.chapterBonuses);
+  check('v1 -> v2 : crédits cumulés estimés sur le meilleur run', 800000, r.data.totalCreditsEarned);
+  check('v1 -> v2 : pic de la partie en cours', 250000, r.data.runPeakCredits);
+  check('v1 -> v2 : un prestige déduit de la réputation', 1, r.data.prestigeCount);
+  check('v1 -> v2 : bonus uniques convertis en niveaux', { prod10: 1, click5: 1 },
+    r.data.prestigeBonusLevels);
+
+  // Après chargement, le rattrapage doit replacer le joueur au bon chapitre :
+  // 250 000 crédits passent les buts 1 (50 créd.), 4 (10 000) et 5 (100 000).
+  const statut = t.load();
+  t.catchUpChapters();
+  check('v1 -> v2 : chargement ok', 'ok', statut);
+  check('v1 -> v2 : rattrapage jusqu\'au chapitre atteint', true, t.state.chapter >= 5);
+  check('v1 -> v2 : Boutique ouverte par le rattrapage', true,
+    t.state.unlockedFeatures.includes('boutique'));
+}
+
+// 14. Partie neuve : rien n'est ouvert avant d'avoir joué
+{
+  const { t } = boot(undefined);
+  check('partie neuve : chapitre 1', 1, t.state.chapter);
+  check('partie neuve : aucune fonctionnalité ouverte', [], t.state.unlockedFeatures);
+  check('partie neuve : Boutique fermée', false, t.isFeatureUnlocked('boutique'));
+  check('partie neuve : Rebranding fermé', false, t.isFeatureUnlocked('prestige'));
+}
+
+// 15. L'escalier de chapitres monte et s'arrête sur le dernier
+{
+  const { t } = boot(undefined);
+  t.state.credits = 1e9;
+  t.state.totalCreditsEarned = 1e9;
+  t.state.runPeakCredits = 1e9;
+  t.state.prestigeCount = 5;
+  t.state.upgrades.find(u => u.id === 'stagiaire').quantity = 20;
+  t.state.upgrades.find(u => u.id === 'devSenior').quantity = 50;
+  t.catchUpChapters();
+  check('escalier : tous les chapitres franchis', t.CHAPTERS.length,
+    t.state.completedChapters.length);
+  check('escalier : partie marquée terminée', true, t.state.gameCompleted);
+  check('escalier : toutes les fonctionnalités ouvertes', true,
+    ['boutique', 'events', 'promotions', 'bureaux', 'branding', 'prestige', 'reputation', 'campus']
+      .every(f => t.isFeatureUnlocked(f)));
 }
 
 const echecs = results.filter(r => !r.ok);

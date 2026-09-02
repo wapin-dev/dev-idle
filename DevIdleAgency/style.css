@@ -1622,3 +1622,122 @@ body.tapstorm-theme #game-screen .plus-locked-card {
 @media (prefers-reduced-motion: reduce) {
   .coming-soon-toast { transition: opacity 0.2s ease; transform: translateY(0); }
 }
+
+/* ============================================================================
+   But courant et objectifs — thème TapStorm
+
+   Ces règles doivent vivre ici et non dans game.css : `style.css` est chargé
+   après lui et redéfinit `--text` en #1a1a2e (reste du thème clair). Un
+   `var(--text)` dans game.css sort donc en bleu nuit sur fond bleu nuit. Le
+   thème TapStorm pose ses couleurs en dur, on fait pareil.
+   ========================================================================== */
+
+/* --- La carte de but, en tête de l'accueil --- */
+body.tapstorm-theme #game-screen .chapter-goal {
+  background: linear-gradient(140deg, rgba(76, 29, 149, 0.55), rgba(30, 22, 37, 0.9));
+  border: 1px solid rgba(139, 92, 246, 0.45);
+  border-radius: 16px;
+  padding: 16px;
+  margin: 0 0 16px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+}
+body.tapstorm-theme #game-screen .chapter-goal-step {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #a78bfa;
+}
+body.tapstorm-theme #game-screen .chapter-goal-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #f1f1f4;
+}
+body.tapstorm-theme #game-screen .chapter-goal-label {
+  margin: 8px 0 12px;
+  font-size: 0.95rem;
+  line-height: 1.35;
+  color: #f1f1f4;
+}
+body.tapstorm-theme #game-screen .chapter-goal-bar {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(15, 14, 23, 0.8);
+  border: 1px solid rgba(139, 92, 246, 0.25);
+}
+body.tapstorm-theme #game-screen .chapter-goal-fill {
+  background: linear-gradient(90deg, #7c3aed, #a78bfa);
+  box-shadow: 0 0 12px rgba(167, 139, 250, 0.5);
+}
+body.tapstorm-theme #game-screen .chapter-goal-value {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #f1f1f4;
+}
+body.tapstorm-theme #game-screen .chapter-goal-reward {
+  font-size: 0.74rem;
+  line-height: 1.3;
+  color: #a5b4fc;
+}
+
+/* --- Objectifs : la ligne passe en colonne pour loger sa barre ---
+   La règle d'origine (`.quests-list > *`) impose un flex horizontal centré :
+   elle écraserait la mise en colonne posée dans game.css. */
+body.tapstorm-theme #game-screen .quests-list .quest-item,
+body.tapstorm-theme #game-screen .quests-list > * {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 8px;
+}
+body.tapstorm-theme #game-screen .quests-list .quest-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+body.tapstorm-theme #game-screen .quests-list .quest-bar {
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(15, 14, 23, 0.8);
+  overflow: hidden;
+}
+body.tapstorm-theme #game-screen .quests-list .quest-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: #a5b4fc;
+  transition: width 0.35s ease;
+}
+body.tapstorm-theme #game-screen .quests-list .quest-item.done .quest-bar {
+  display: none;
+}
+
+/* --- Fin de chapitre et fin de partie --- */
+body.tapstorm-theme #game-screen .chapter-complete-name {
+  color: #a78bfa;
+}
+body.tapstorm-theme #game-screen .chapter-complete-bonus,
+body.tapstorm-theme #game-screen .chapter-complete-unlock,
+body.tapstorm-theme #game-screen .game-complete-body,
+body.tapstorm-theme #game-screen .game-complete-agency {
+  color: #f1f1f4;
+}
+body.tapstorm-theme #game-screen .chapter-complete-next-label,
+body.tapstorm-theme #game-screen .game-complete-kicker {
+  color: #a5b4fc;
+}
+body.tapstorm-theme #game-screen .chapter-complete-next,
+body.tapstorm-theme #game-screen .game-complete-stats {
+  background: rgba(30, 22, 37, 0.85);
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  color: #f1f1f4;
+}
+body.tapstorm-theme #game-screen .game-complete-stats {
+  color: #a5b4fc;
+}
+body.tapstorm-theme #game-screen .prestige-level {
+  color: #a78bfa;
+}
+

@@ -8,7 +8,7 @@
    * progression de quelqu'un sans en garder une trace récupérable.
    */
   const SAVE_BACKUP_KEY = SAVE_KEY + '-backup';
-  const SAVE_VERSION = 1;
+  const SAVE_VERSION = 2;
 
   /**
    * Migrations de sauvegarde.
@@ -32,7 +32,45 @@
    *     1: function (data) { data.nouveauChamp = data.ancienChamp || 0; return data; },
    *   };
    */
-  const SAVE_MIGRATIONS = {};
+  const SAVE_MIGRATIONS = {
+    /**
+     * 1 → 2 : refonte de la progression (chapitres devenus le seul escalier,
+     * boutique Réputation répétable).
+     *
+     * L'ancien `chapter` ne veut plus rien dire : il avançait sur un seuil de
+     * crédits sans que rien ne soit accompli, et le prestige le remettait à 1.
+     * On le remet à zéro et on laisse `catchUpChapters()` recalculer le vrai
+     * chapitre à partir de l'état de la partie, ce qui réapplique au passage
+     * les récompenses et les déblocages.
+     */
+    1: function (data) {
+      data.chapter = 1;
+      data.completedChapters = [];
+      data.chapterBonuses = {};
+      data.unlockedFeatures = [];
+      data.gameCompleted = false;
+      // Aucun compteur de crédits cumulés n'existait : le meilleur run connu
+      // est la seule approximation honnête dont on dispose.
+      if (typeof data.totalCreditsEarned !== 'number') {
+        data.totalCreditsEarned = Math.max(data.bestRunCredits || 0, data.credits || 0);
+      }
+      if (typeof data.runPeakCredits !== 'number') data.runPeakCredits = data.credits || 0;
+      // Le nombre de Rebrandings n'était pas suivi non plus. Avoir de la
+      // réputation ou un bonus acheté prouve au moins un prestige.
+      if (typeof data.prestigeCount !== 'number') {
+        var hadPrestige = (data.reputation || 0) > 0 || (Array.isArray(data.purchasedPrestigeBonuses) && data.purchasedPrestigeBonuses.length > 0);
+        data.prestigeCount = hadPrestige ? 1 : 0;
+      }
+      // Les bonus à usage unique deviennent des niveaux : un achat = niveau 1.
+      if (!data.prestigeBonusLevels) {
+        data.prestigeBonusLevels = {};
+        (Array.isArray(data.purchasedPrestigeBonuses) ? data.purchasedPrestigeBonuses : []).forEach(function (id) {
+          data.prestigeBonusLevels[id] = 1;
+        });
+      }
+      return data;
+    },
+  };
   const TICK_MS = 100;
   // La boucle tourne à 100 ms pour la production, mais l'interface n'a pas besoin
   // de suivre cette cadence : les listes et les boutons sont rafraîchis 4 fois par
@@ -206,11 +244,135 @@
     'Un bug, une leçon. Garde ton calme.',
   ];
 
+  /**
+   * Colonne vertébrale du jeu. Un chapitre = un but unique, lisible en une
+   * phrase, une récompense, et une fonctionnalité qui s'ouvre. C'est le seul
+   * escalier de progression : on n'avance QUE en remplissant le but courant.
+   *
+   * L'ancienne version en avait deux, désynchronisés — un `creditsReq` qui
+   * faisait avancer le badge tout seul, et un `objective` qui ne servait à
+   * rien parce qu'il demandait 1e9 crédits (~29 jours de jeu mesurés) alors
+   * que le prestige, qui remet le chapitre à 1, s'ouvre à 1e5 (~49 min).
+   * Aucun chapitre n'était donc terminable. Les buts ci-dessous sont calibrés
+   * sur la courbe réelle simulée, et les chapitres ne sont plus remis à zéro
+   * par le prestige : c'est la progression permanente du joueur.
+   *
+   * `goal.kind` :
+   *   credits      crédits en poche maintenant
+   *   runCredits   meilleur total atteint depuis le dernier Rebranding
+   *   totalCredits crédits gagnés depuis le début de la partie, tous runs confondus
+   *   prodPerSec   production passive par seconde
+   *   level        niveau du joueur
+   *   upgradeQty   quantité d'un producteur (`goal.upgradeId`)
+   *   prestiges    nombre de Rebrandings effectués
+   */
   const CHAPTERS = [
-    { id: 1, name: 'Freelance', creditsReq: 0, levelReq: 0, objective: { credits: 1e9, level: 30 }, bonus: { prodPercent: 5 } },
-    { id: 2, name: 'Petite agence locale', creditsReq: 1e6, levelReq: 5, objective: { credits: 1e12, level: 60 }, bonus: { prodPercent: 10 } },
-    { id: 3, name: 'Agence internationale', creditsReq: 1e9, levelReq: 15, objective: null, bonus: null },
+    {
+      id: 1,
+      name: 'Premier commit',
+      tagline: 'Une idée, un clavier, zéro client.',
+      goal: { kind: 'credits', target: 50, label: 'Gagner 50 crédits en codant' },
+      reward: { clickPower: 1 },
+      rewardLabel: '+1 crédit par clic',
+      unlocks: ['boutique'],
+      unlockLabel: 'la Boutique — tu peux embaucher',
+      unlockShort: 'la Boutique',
+    },
+    {
+      id: 2,
+      name: 'Le premier stagiaire',
+      tagline: 'Il ne sait pas encore ce qu\'il fait. Toi non plus.',
+      goal: { kind: 'upgradeQty', upgradeId: 'stagiaire', target: 3, label: 'Avoir 3 stagiaires' },
+      reward: { prodPercent: 5 },
+      rewardLabel: '+5% production',
+      unlocks: ['promotions'],
+      unlockLabel: 'les promotions — fais monter tes devs en grade',
+      unlockShort: 'les promotions',
+    },
+    {
+      id: 3,
+      name: 'Ça tourne tout seul',
+      tagline: 'L\'agence produit même quand tu ne regardes pas.',
+      goal: { kind: 'prodPerSec', target: 10, label: 'Atteindre 10 crédits/s de production' },
+      reward: { prodPercent: 5 },
+      rewardLabel: '+5% production',
+      unlocks: ['events'],
+      unlockLabel: 'les événements — hackathons et clients toxiques',
+      unlockShort: 'les événements',
+    },
+    {
+      id: 4,
+      name: 'Le garage',
+      tagline: 'Deux bureaux, une machine à café, beaucoup d\'espoir.',
+      goal: { kind: 'runCredits', target: 10000, label: 'Atteindre 10 000 crédits' },
+      reward: { prodPercent: 10 },
+      rewardLabel: '+10% production',
+      unlocks: ['bureaux'],
+      unlockLabel: 'les Bureaux — des locaux qui boostent toute l\'agence',
+      unlockShort: 'les Bureaux',
+    },
+    {
+      id: 5,
+      name: 'Petite agence locale',
+      tagline: 'On te connaît dans le quartier.',
+      goal: { kind: 'runCredits', target: 100000, label: 'Atteindre 100 000 crédits' },
+      reward: { prodPercent: 10 },
+      rewardLabel: '+10% production',
+      unlocks: ['branding', 'prestige'],
+      unlockLabel: 'l\'Image de marque et le Rebranding',
+      unlockShort: 'l\'Image et le Rebranding',
+    },
+    {
+      id: 6,
+      name: 'Rebranding',
+      tagline: 'Tout recommencer, mais avec un nom qui pèse.',
+      goal: { kind: 'prestiges', target: 1, label: 'Faire ton premier Rebranding' },
+      reward: { prodPercent: 10 },
+      rewardLabel: '+10% production',
+      unlocks: ['reputation'],
+      unlockLabel: 'la boutique Réputation',
+      unlockShort: 'la boutique Réputation',
+    },
+    {
+      id: 7,
+      name: 'Agence reconnue',
+      tagline: 'Les clients viennent à toi.',
+      goal: { kind: 'runCredits', target: 1e6, label: 'Atteindre 1 M de crédits sur une partie' },
+      reward: { prodPercent: 15 },
+      rewardLabel: '+15% production',
+      unlocks: ['campus'],
+      unlockLabel: 'le Campus high-tech — et le CTO qui va avec',
+      unlockShort: 'le Campus',
+    },
+    {
+      id: 8,
+      name: 'Agence qui compte',
+      tagline: 'Trois vies, trois logos, une réputation.',
+      goal: { kind: 'prestiges', target: 3, label: 'Avoir fait 3 Rebrandings' },
+      reward: { prodPercent: 20 },
+      rewardLabel: '+20% production',
+      unlocks: [],
+      unlockLabel: null,
+    },
+    {
+      id: 9,
+      name: 'Studio légendaire',
+      tagline: 'On raconte ton agence dans les écoles.',
+      goal: { kind: 'totalCredits', target: 1e8, label: 'Gagner 100 M de crédits en tout' },
+      reward: { prodPercent: 25 },
+      rewardLabel: '+25% production',
+      unlocks: [],
+      unlockLabel: null,
+      isFinal: true,
+    },
   ];
+
+  /**
+   * Fonctionnalités ouvertes par les chapitres. Tant qu'un chapitre n'est pas
+   * terminé, ce qu'il ouvre reste hors de portée : c'est ce qui donne une
+   * raison de viser le but courant plutôt que de regarder un compteur monter.
+   */
+  const CHAPTER_FEATURES = ['boutique', 'events', 'promotions', 'bureaux', 'branding', 'prestige', 'reputation', 'campus'];
 
   const LEVEL_BONUSES = [
     { id: 'prod2', name: '+2% production', desc: 'Bonus permanent sur la prod passive', effect: { prodPercent: 2 } },
@@ -313,39 +475,53 @@
     { id: 'cafe', name: 'Machine à café', desc: '+5% prod quand tu es en ligne. Le carburant du dev.', basePrice: 1500, priceGrowth: 1, activeBonus: 0.05, maxQty: 1 },
   ];
 
+  function countStagiaires() {
+    return (getUpgradeState('stagiaire')?.quantity || 0)
+      + (state.employees || []).filter((e) => e.type === 'stagiaire').length;
+  }
+
+  /** Objectif chiffré sur une valeur qui monte : barre + « x / y » dans la liste. */
+  function numericQuest(id, name, read, target, xp) {
+    return {
+      id: id, name: name, reward: { xp: xp },
+      target: function () { return read() >= target; },
+      progress: function () { return { current: read(), target: target }; },
+    };
+  }
+
   const QUEST_DEFS = [
     /* Crédits – paliers plus exigeants */
-    { id: 'credits5k', name: 'Premier pactole (5K crédits)', target: () => state.credits >= 5000, reward: { xp: 30 } },
-    { id: 'credits25k', name: 'En croissance (25K crédits)', target: () => state.credits >= 25000, reward: { xp: 80 } },
-    { id: 'credits100k', name: '100K au compteur', target: () => state.credits >= 1e5, reward: { xp: 150 } },
-    { id: 'credits500k', name: 'Demi-million', target: () => state.credits >= 5e5, reward: { xp: 300 } },
-    { id: 'credits1M', name: 'Millionnaire', target: () => state.credits >= 1e6, reward: { xp: 500 } },
-    { id: 'credits5M', name: '5 millions', target: () => state.credits >= 5e6, reward: { xp: 800 } },
-    { id: 'credits25M', name: '25 millions', target: () => state.credits >= 25e6, reward: { xp: 1200 } },
-    { id: 'credits100M', name: '100 millions', target: () => state.credits >= 1e8, reward: { xp: 2000 } },
-    { id: 'credits500M', name: 'Demi-milliard', target: () => state.credits >= 5e8, reward: { xp: 3500 } },
-    { id: 'credits1B', name: 'Milliardaire', target: () => state.credits >= 1e9, reward: { xp: 5000 } },
+    numericQuest('credits5k', 'Premier pactole (5K crédits)', () => state.credits, 5000, 30),
+    numericQuest('credits25k', 'En croissance (25K crédits)', () => state.credits, 25000, 80),
+    numericQuest('credits100k', '100K au compteur', () => state.credits, 1e5, 150),
+    numericQuest('credits500k', 'Demi-million', () => state.credits, 5e5, 300),
+    numericQuest('credits1M', 'Millionnaire', () => state.credits, 1e6, 500),
+    numericQuest('credits5M', '5 millions', () => state.credits, 5e6, 800),
+    numericQuest('credits25M', '25 millions', () => state.credits, 25e6, 1200),
+    numericQuest('credits100M', '100 millions', () => state.credits, 1e8, 2000),
+    numericQuest('credits500M', 'Demi-milliard', () => state.credits, 5e8, 3500),
+    numericQuest('credits1B', 'Milliardaire', () => state.credits, 1e9, 5000),
     /* Niveau */
-    { id: 'level5', name: 'Niveau 5', target: () => state.playerLevel >= 5, reward: { xp: 100 } },
-    { id: 'level10', name: 'Niveau 10', target: () => state.playerLevel >= 10, reward: { xp: 200 } },
-    { id: 'level15', name: 'Niveau 15', target: () => state.playerLevel >= 15, reward: { xp: 350 } },
-    { id: 'level20', name: 'Niveau 20', target: () => state.playerLevel >= 20, reward: { xp: 500 } },
-    { id: 'level30', name: 'Niveau 30', target: () => state.playerLevel >= 30, reward: { xp: 800 } },
-    { id: 'level40', name: 'Niveau 40', target: () => state.playerLevel >= 40, reward: { xp: 1200 } },
-    { id: 'level50', name: 'Niveau 50', target: () => state.playerLevel >= 50, reward: { xp: 1800 } },
-    { id: 'level60', name: 'Niveau 60', target: () => state.playerLevel >= 60, reward: { xp: 2500 } },
+    numericQuest('level5', 'Niveau 5', () => state.playerLevel, 5, 100),
+    numericQuest('level10', 'Niveau 10', () => state.playerLevel, 10, 200),
+    numericQuest('level15', 'Niveau 15', () => state.playerLevel, 15, 350),
+    numericQuest('level20', 'Niveau 20', () => state.playerLevel, 20, 500),
+    numericQuest('level30', 'Niveau 30', () => state.playerLevel, 30, 800),
+    numericQuest('level40', 'Niveau 40', () => state.playerLevel, 40, 1200),
+    numericQuest('level50', 'Niveau 50', () => state.playerLevel, 50, 1800),
+    numericQuest('level60', 'Niveau 60', () => state.playerLevel, 60, 2500),
     /* Recrutement & équipe */
     { id: 'recruit3', name: '3 employés recrutés', target: () => (state.employees || []).length >= 3, reward: { xp: 60 } },
     { id: 'recruit8', name: '8 employés recrutés', target: () => (state.employees || []).length >= 8, reward: { xp: 200 } },
     { id: 'recruit15', name: '15 employés recrutés', target: () => (state.employees || []).length >= 15, reward: { xp: 500 } },
-    { id: 'stagiaires5', name: '5 stagiaires', target: () => (getUpgradeState('stagiaire')?.quantity || 0) + (state.employees || []).filter((e) => e.type === 'stagiaire').length >= 5, reward: { xp: 80 } },
-    { id: 'stagiaires15', name: '15 stagiaires', target: () => (getUpgradeState('stagiaire')?.quantity || 0) + (state.employees || []).filter((e) => e.type === 'stagiaire').length >= 15, reward: { xp: 250 } },
+    numericQuest('stagiaires5', '5 stagiaires', countStagiaires, 5, 80),
+    numericQuest('stagiaires15', '15 stagiaires', countStagiaires, 15, 250),
     { id: 'managers1', name: 'Premier cadre (manager)', target: () => (state.managers || []).some((m) => m.quantity > 0), reward: { xp: 300 } },
     { id: 'managers3', name: '3 cadres différents', target: () => (state.managers || []).filter((m) => m.quantity > 0).length >= 3, reward: { xp: 800 } },
     { id: 'training1', name: 'Une formation achetée', target: () => (state.training || []).some((t) => t.quantity > 0), reward: { xp: 400 } },
     /* Bureaux & image */
-    { id: 'office1', name: 'Premier bureau', target: () => getOwnedOfficesCount() >= 1, reward: { xp: 100 } },
-    { id: 'bureaux3', name: '3 bureaux différents', target: () => getOwnedOfficesCount() >= 3, reward: { xp: 400 } },
+    numericQuest('office1', 'Premier bureau', getOwnedOfficesCount, 1, 100),
+    numericQuest('bureaux3', '3 bureaux différents', getOwnedOfficesCount, 3, 400),
     { id: 'branding1', name: 'Premier achat image (branding)', target: () => (state.branding || []).some((b) => b.quantity > 0), reward: { xp: 150 } },
     { id: 'brandingAll', name: 'Toute l\'image (3 brandings)', target: () => (state.branding || []).filter((b) => b.quantity > 0).length >= 3, reward: { xp: 600 } },
     /* International & contrats */
@@ -353,10 +529,12 @@
     { id: 'contrat1', name: 'Premier contrat livré', target: () => (state.contratsClaimedCount || 0) >= 1, reward: { xp: 200 } },
     { id: 'rnd1', name: 'Une R&D achetée', target: () => (state.rnd || []).some((r) => r.purchased), reward: { xp: 500 } },
     /* Chapitres */
-    { id: 'chapter1obj', name: 'Objectif chapitre 1 (1B crédits, niv.30)', target: () => (state.completedChapters || []).includes(1), reward: { xp: 1000 } },
-    { id: 'chapter2obj', name: 'Objectif chapitre 2 (1T crédits, niv.60)', target: () => (state.completedChapters || []).includes(2), reward: { xp: 2500 } },
+    numericQuest('chapters3', 'Terminer 3 chapitres', () => (state.completedChapters || []).length, 3, 600),
+    numericQuest('chapters6', 'Terminer 6 chapitres', () => (state.completedChapters || []).length, 6, 1500),
+    numericQuest('chaptersAll', 'Terminer tous les chapitres', () => (state.completedChapters || []).length, CHAPTERS.length, 5000),
     /* Prestige */
-    { id: 'prestige1', name: 'Premier prestige', target: () => state.reputation >= 1, reward: { xp: 1500 } },
+    numericQuest('prestige1', 'Premier Rebranding', () => state.prestigeCount || 0, 1, 1500),
+    numericQuest('prestige5', '5 Rebrandings', () => state.prestigeCount || 0, 5, 4000),
   ];
   /**
    * Les objectifs portant sur du contenu verrouillé sont retirés du jeu : ils
@@ -367,11 +545,26 @@
     : QUEST_DEFS;
   const QUEST_DISPLAY_LIMIT = 5;
 
+  /**
+   * Boutique Réputation. Chaque bonus est RÉPÉTABLE, son coût monte à chaque
+   * palier — sinon la couche méta se bouche : l'ancienne version comptait
+   * 3 bonus à usage unique pour 4 points de réputation en tout, et un seul
+   * Rebranding à 1 M en rapportait déjà 3. Passé le deuxième, la réputation
+   * ne servait plus à rien et le prestige n'avait plus d'intérêt.
+   */
   const PRESTIGE_BONUSES = [
-    { id: 'prod10', name: '+10% prod passive', cost: 1, effect: { prodPercent: 10 } },
-    { id: 'click5', name: '+5% clics', cost: 1, effect: { clickPercent: 5 } },
-    { id: 'xp20', name: '+20% XP', cost: 2, effect: { xpPercent: 20 } },
+    { id: 'prod10', name: 'Production +10%', desc: 'Bonus permanent sur la prod passive, cumulable.', baseCost: 1, costGrowth: 1.6, effect: { prodPercent: 10 } },
+    { id: 'click5', name: 'Clics +5%', desc: 'Chaque clic rapporte plus, cumulable.', baseCost: 1, costGrowth: 1.6, effect: { clickPercent: 5 } },
+    { id: 'xp20', name: 'XP +20%', desc: 'Tu montes de niveau plus vite, cumulable.', baseCost: 2, costGrowth: 1.6, effect: { xpPercent: 20 } },
+    { id: 'offline15', name: 'Hors-ligne +15%', desc: 'Tu récupères plus de production pendant ton absence.', baseCost: 2, costGrowth: 1.8, effect: { offlinePercent: 15 } },
+    { id: 'headstart', name: 'Reprise +2%', desc: 'Tu gardes 2% de tes crédits en faisant un Rebranding.', baseCost: 3, costGrowth: 2, effect: { headstartPercent: 2 } },
   ];
+
+  function getPrestigeBonusLevel(id) { return (state.prestigeBonusLevels && state.prestigeBonusLevels[id]) || 0; }
+
+  function getPrestigeBonusCost(def) {
+    return Math.ceil(def.baseCost * Math.pow(def.costGrowth, getPrestigeBonusLevel(def.id)));
+  }
 
   let state = {
     credits: 0,
@@ -399,10 +592,21 @@
     completedQuests: [],
     chapter: 1,
     completedChapters: [],
+    /** Fonctionnalités ouvertes par les chapitres terminés. Survit au prestige. */
+    unlockedFeatures: [],
+    /** Crédits gagnés depuis le début de la partie, prestiges compris. */
+    totalCreditsEarned: 0,
+    /** Pic de crédits de la partie en cours, remis à zéro par le Rebranding. */
+    runPeakCredits: 0,
+    /** Nombre de Rebrandings effectués. Sert de but à deux chapitres. */
+    prestigeCount: 0,
+    /** Passe à vrai une fois le dernier chapitre terminé. */
+    gameCompleted: false,
     reputation: 0,
     unlockedEmployeeUpgrades: [],
     prestigeBonuses: {},
-    purchasedPrestigeBonuses: [],
+    /** Nombre d'achats par bonus de la boutique Réputation (ils sont répétables). */
+    prestigeBonusLevels: {},
     agencyName: 'Mon Agence',
     themeColor: 'default',
     bestRunCredits: 0,
@@ -893,6 +1097,7 @@
     const cafe = getBrandingState('cafe');
     const cafeDef = getBrandingDef('cafe');
     if (cafe && cafe.quantity > 0 && cafeDef && cafeDef.activeBonus) total *= 1 + cafeDef.activeBonus;
+
     return total * GLOBAL_PRODUCTION_SCALE;
   }
 
@@ -1046,7 +1251,6 @@
     state.credits -= price;
     os.quantity += 1;
     addXP(price * XP_PER_CREDIT);
-    checkChapter();
     renderOffices();
     renderCredits();
   }
@@ -1069,6 +1273,7 @@
     // Toujours basé sur le pouvoir de clic effectif (multiplicateurs inclus)
     const finalAmount = Math.max(1, Math.floor(getClickPower()) || 1);
     state.credits = (state.credits || 0) + finalAmount;
+    state.totalCreditsEarned = (state.totalCreditsEarned || 0) + finalAmount;
     addXP(XP_PER_CLICK);
     maybeBigClient();
     renderCredits();
@@ -1085,33 +1290,148 @@
     });
     if (chance > 0 && Math.random() < chance) {
       const mult = linkedinDef?.bigClientMultiplier || 50;
-      state.credits += mult * getClickPower();
+      const bigGain = mult * getClickPower();
+      state.credits += bigGain;
+      state.totalCreditsEarned = (state.totalCreditsEarned || 0) + bigGain;
     }
   }
 
-  function checkChapter() {
-    const ch = CHAPTERS.find((c) => c.id === state.chapter + 1);
-    if (!ch) return;
-    if (state.credits >= ch.creditsReq && state.playerLevel >= ch.levelReq) {
-      state.chapter = ch.id;
-      document.body.setAttribute('data-chapter', state.chapter);
-      renderChapter();
+  function getChapterDef(id) { return CHAPTERS.find((c) => c.id === id); }
+
+  function getCurrentChapter() { return getChapterDef(state.chapter); }
+
+  /**
+   * Où en est le joueur sur le but du chapitre en cours.
+   * Renvoie de quoi remplir une barre ET l'écrire en chiffres : un but qu'on
+   * ne peut pas mesurer à l'œil n'est pas un but, c'est une surprise.
+   */
+  function getChapterProgress(ch) {
+    if (!ch || !ch.goal) return null;
+    const goal = ch.goal;
+    let current = 0;
+    let unit = '';
+    switch (goal.kind) {
+      case 'credits': current = state.credits || 0; unit = ' crédits'; break;
+      case 'runCredits': current = Math.max(state.credits || 0, state.runPeakCredits || 0); unit = ' crédits'; break;
+      case 'totalCredits': current = state.totalCreditsEarned || 0; unit = ' crédits'; break;
+      case 'prodPerSec': current = getProductionPerSecond(); unit = '/s'; break;
+      case 'level': current = state.playerLevel || 1; break;
+      case 'upgradeQty': current = (getUpgradeState(goal.upgradeId)?.quantity || 0); break;
+      case 'prestiges': current = state.prestigeCount || 0; break;
+      default: return null;
     }
+    const target = goal.target;
+    const capped = Math.min(current, target);
+    return {
+      current: capped,
+      target: target,
+      unit: unit,
+      ratio: target > 0 ? Math.min(1, current / target) : 1,
+      done: current >= target,
+      text: formatNumber(capped) + ' / ' + formatNumber(target) + unit,
+    };
+  }
+
+  /** Une fonctionnalité est ouverte quand le chapitre qui la porte est terminé. */
+  function isFeatureUnlocked(feature) {
+    if (CHAPTER_FEATURES.indexOf(feature) < 0) return true;
+    return (state.unlockedFeatures || []).indexOf(feature) >= 0;
+  }
+
+  function applyChapterReward(ch) {
+    if (!ch) return;
+    if (ch.reward && ch.reward.prodPercent) state.chapterBonuses['ch' + ch.id] = { prodPercent: ch.reward.prodPercent };
+    if (ch.reward && ch.reward.clickPower) state.clickPower = (state.clickPower || 1) + ch.reward.clickPower;
+    state.unlockedFeatures = state.unlockedFeatures || [];
+    (ch.unlocks || []).forEach(function (f) {
+      if (state.unlockedFeatures.indexOf(f) < 0) state.unlockedFeatures.push(f);
+    });
+  }
+
+  /**
+   * Termine le chapitre courant et passe au suivant.
+   * `silent` sert au rattrapage au chargement : une sauvegarde qui remplit
+   * déjà trois buts d'affilée ne doit pas empiler trois modales au démarrage.
+   */
+  function completeCurrentChapter(silent) {
+    const ch = getCurrentChapter();
+    if (!ch) return false;
+    state.completedChapters = state.completedChapters || [];
+    if (state.completedChapters.indexOf(ch.id) < 0) state.completedChapters.push(ch.id);
+    applyChapterReward(ch);
+    const next = getChapterDef(ch.id + 1);
+    if (next) state.chapter = next.id;
+    else state.gameCompleted = true;
+    document.body.setAttribute('data-chapter', state.chapter);
+    if (!silent) {
+      if (ch.isFinal || !next) showGameCompleteModal(ch);
+      else showChapterCompleteModal(ch);
+    }
+    return true;
   }
 
   function checkChapterObjective() {
-    const ch = CHAPTERS.find((c) => c.id === state.chapter);
-    if (!ch || !ch.objective || (state.completedChapters || []).includes(state.chapter)) return;
-    if (state.credits >= ch.objective.credits && state.playerLevel >= ch.objective.level) {
-      (state.completedChapters = state.completedChapters || []).push(state.chapter);
-      if (ch.bonus) state.chapterBonuses['ch' + state.chapter] = ch.bonus;
-      showChapterCompleteModal();
+    if (state.gameCompleted) return;
+    const ch = getCurrentChapter();
+    if (!ch) return;
+    const p = getChapterProgress(ch);
+    if (!p || !p.done) return;
+    completeCurrentChapter(false);
+    applyChapterUnlocks();
+    renderChapter();
+    renderChapterGoal();
+    renderActiveTab();
+  }
+
+  /**
+   * Au chargement, avance sans bruit sur tous les chapitres dont le but est
+   * déjà rempli. C'est ce qui rattrape une sauvegarde d'avant la refonte : le
+   * joueur retrouve le chapitre qui correspond vraiment à sa partie, avec les
+   * récompenses et les déblocages appliqués, sans cascade de modales.
+   */
+  function catchUpChapters() {
+    let done = 0;
+    for (let guard = 0; guard < CHAPTERS.length + 1; guard++) {
+      if (state.gameCompleted) break;
+      const ch = getCurrentChapter();
+      if (!ch) break;
+      const p = getChapterProgress(ch);
+      if (!p || !p.done) break;
+      completeCurrentChapter(true);
+      done++;
     }
+    return done;
   }
 
   function completeChapterAndContinue() {
     hideChapterCompleteModal();
+    applyChapterUnlocks();
     renderAll();
+  }
+
+  /**
+   * Cache ce que les chapitres n'ont pas encore ouvert, et le fait réapparaître
+   * dès que le chapitre tombe.
+   *
+   * Les boutons d'onglet ne peuvent pas être masqués par `hidden` seul : la
+   * règle `.tapstorm-nav .tab-btn { display: flex }` de style.css la bat en
+   * spécificité. Une règle explicite `[hidden]` a été ajoutée à côté d'elle,
+   * c'est elle qui fait le travail ici — voir game.css.
+   */
+  function applyChapterUnlocks() {
+    document.querySelectorAll('[data-chapter-feature]').forEach(function (el) {
+      el.hidden = !isFeatureUnlocked(el.getAttribute('data-chapter-feature'));
+    });
+    var navGates = { boutique: 'boutique', plus: 'prestige' };
+    Object.keys(navGates).forEach(function (tab) {
+      var btn = document.querySelector('.tab-btn[data-tab="' + tab + '"]');
+      if (!btn) return;
+      var open = isFeatureUnlocked(navGates[tab]);
+      btn.hidden = !open;
+      // Rester sur un onglet qu'on vient de fermer laisserait un écran vide.
+      if (!open && activeTab === tab) showTabByName('accueil');
+    });
+    centerClickButton();
   }
 
   function processContrats() {
@@ -1183,6 +1503,7 @@
   }
 
   function maybeTriggerEvent() {
+    if (!isFeatureUnlocked('events')) return;
     if (state.activeEvent) return;
     if (Date.now() < state.nextEventAt) return;
     const bonusChance = getEventBonusChance();
@@ -1216,10 +1537,11 @@
   }
 
   function doPrestige() {
-    if (!canPrestige()) return;
+    if (!canPrestige() || !isFeatureUnlocked('prestige')) return;
     const repGain = Math.floor(Math.sqrt(state.credits / PRESTIGE_THRESHOLD));
     state.reputation += repGain;
-    state.credits = 0;
+    const headstart = ((state.prestigeBonuses && state.prestigeBonuses.headstartPercent) || 0) / 100;
+    state.credits = Math.floor(state.credits * headstart);
     state.upgrades.forEach((u) => (u.quantity = 0));
     state.offices.forEach((o) => (o.quantity = 0));
     state.branding.forEach((b) => (b.quantity = 0));
@@ -1233,10 +1555,12 @@
     state.playerXP = 0;
     state.levelBonuses = {};
     state.completedQuests = [];
-    state.purchasedPrestigeBonuses = state.purchasedPrestigeBonuses || [];
-    state.chapter = 1;
-    state.completedChapters = [];
-    document.body.setAttribute('data-chapter', '1');
+    state.prestigeCount = (state.prestigeCount || 0) + 1;
+    // Les chapitres ne sont PAS remis à zéro : c'est la progression permanente
+    // du joueur, et deux chapitres ont justement le Rebranding pour but. Les
+    // remettre à 1 rendait tout l'escalier interminable.
+    state.runPeakCredits = 0;
+    document.body.setAttribute('data-chapter', state.chapter);
     state.activeEvent = null;
     state.agencyEventChoice = null;
     state.employees = [];
@@ -1302,10 +1626,15 @@
         completedQuests: state.completedQuests,
         chapter: state.chapter,
         completedChapters: state.completedChapters,
+        unlockedFeatures: state.unlockedFeatures,
+        totalCreditsEarned: state.totalCreditsEarned,
+        runPeakCredits: state.runPeakCredits,
+        prestigeCount: state.prestigeCount,
+        gameCompleted: state.gameCompleted,
+        prestigeBonusLevels: state.prestigeBonusLevels,
         reputation: state.reputation,
         unlockedEmployeeUpgrades: state.unlockedEmployeeUpgrades,
         prestigeBonuses: state.prestigeBonuses,
-        purchasedPrestigeBonuses: state.purchasedPrestigeBonuses,
         agencyName: state.agencyName,
         bestRunCredits: state.bestRunCredits,
         agencyEventChoice: state.agencyEventChoice,
@@ -1466,6 +1795,12 @@
       if (Array.isArray(data.completedQuests)) state.completedQuests = data.completedQuests;
       if (typeof data.chapter === 'number') state.chapter = data.chapter;
       if (Array.isArray(data.completedChapters)) state.completedChapters = data.completedChapters;
+      if (Array.isArray(data.unlockedFeatures)) state.unlockedFeatures = data.unlockedFeatures;
+      if (typeof data.totalCreditsEarned === 'number') state.totalCreditsEarned = data.totalCreditsEarned;
+      if (typeof data.runPeakCredits === 'number') state.runPeakCredits = data.runPeakCredits;
+      if (typeof data.prestigeCount === 'number') state.prestigeCount = data.prestigeCount;
+      if (typeof data.gameCompleted === 'boolean') state.gameCompleted = data.gameCompleted;
+      if (data.prestigeBonusLevels) state.prestigeBonusLevels = data.prestigeBonusLevels;
       if (data.chapterBonuses) state.chapterBonuses = data.chapterBonuses;
       if (typeof data.reputation === 'number') state.reputation = data.reputation;
       if (Array.isArray(data.unlockedEmployeeUpgrades)) state.unlockedEmployeeUpgrades = data.unlockedEmployeeUpgrades;
@@ -1477,7 +1812,6 @@
       if (typeof data.contratsClaimedCount === 'number') state.contratsClaimedCount = data.contratsClaimedCount;
       if (Array.isArray(data.rnd)) data.rnd.forEach((s) => { const rs = getRndState(s.id); if (rs && typeof s.purchased === 'boolean') rs.purchased = s.purchased; });
       if (typeof data.bestRunCredits === 'number') state.bestRunCredits = data.bestRunCredits;
-      if (Array.isArray(data.purchasedPrestigeBonuses)) state.purchasedPrestigeBonuses = data.purchasedPrestigeBonuses;
       if (typeof data.nextEventAt === 'number') state.nextEventAt = data.nextEventAt;
       if (data.activeEvent && EVENTS[data.activeEvent]) {
         state.activeEvent = EVENTS[data.activeEvent];
@@ -1556,14 +1890,58 @@
     if (modal) modal.hidden = true;
   }
 
-  function showChapterCompleteModal() {
+  /**
+   * Fin de chapitre. On annonce trois choses, dans cet ordre : ce qui vient
+   * d'être accompli, ce que ça rapporte, et surtout ce qu'il faut viser
+   * maintenant — le joueur ne doit jamais refermer cette modale sans savoir
+   * quel est son prochain but.
+   * @param {object} ch chapitre qui vient d'être terminé
+   */
+  function showChapterCompleteModal(ch) {
     const modal = document.getElementById('chapter-complete-modal');
-    const ch = CHAPTERS.find((c) => c.id === state.chapter);
-    if (modal && ch && ch.bonus) {
-      document.getElementById('chapter-complete-title').textContent = 'Chapitre ' + state.chapter + ' terminé !';
-      document.getElementById('chapter-complete-bonus').textContent = 'Bonus permanent : +' + (ch.bonus.prodPercent || 0) + '% production';
-      modal.hidden = false;
+    if (!modal || !ch) return;
+    setText('chapter-complete-title', 'Chapitre ' + ch.id + ' terminé');
+    setText('chapter-complete-name', ch.name);
+    setText('chapter-complete-bonus', ch.rewardLabel ? 'Récompense : ' + ch.rewardLabel : '');
+    const unlockEl = document.getElementById('chapter-complete-unlock');
+    if (unlockEl) {
+      unlockEl.textContent = ch.unlockLabel ? 'Débloqué : ' + ch.unlockLabel : '';
+      unlockEl.hidden = !ch.unlockLabel;
     }
+    const next = getChapterDef(ch.id + 1);
+    const nextEl = document.getElementById('chapter-complete-next');
+    if (nextEl) {
+      nextEl.textContent = next ? 'Chapitre ' + next.id + ' · ' + next.name + ' — ' + next.goal.label : '';
+      nextEl.hidden = !next;
+    }
+    modal.hidden = false;
+  }
+
+  /** Écran de fin : le dernier chapitre est terminé, la partie a une conclusion. */
+  function showGameCompleteModal(ch) {
+    const modal = document.getElementById('game-complete-modal');
+    if (!modal) {
+      // Pas de modale de fin dans le DOM : on ne perd pas l'information pour autant.
+      showToast('Tu as terminé DevIdle Agency. Bravo.', 6000);
+      return;
+    }
+    const name = (state.agencyName && state.agencyName.trim()) ? state.agencyName.trim() : 'Ton agence';
+    setText('game-complete-agency', name);
+    setText('game-complete-stats',
+      formatNumber(state.totalCreditsEarned || 0) + ' crédits gagnés · niveau ' +
+      (state.playerLevel || 1) + ' · ' + (state.prestigeCount || 0) + ' Rebranding' +
+      ((state.prestigeCount || 0) > 1 ? 's' : ''));
+    modal.hidden = false;
+  }
+
+  function hideGameCompleteModal() {
+    const modal = document.getElementById('game-complete-modal');
+    if (modal) modal.hidden = true;
+  }
+
+  function setText(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
   }
 
   function hideChapterCompleteModal() {
@@ -2023,10 +2401,103 @@
   }
 
   function renderChapter() {
-    const ch = CHAPTERS.find((c) => c.id === state.chapter);
+    const ch = getCurrentChapter();
     const el = document.getElementById('chapter-badge');
-    if (el && ch) el.textContent = 'Chapitre ' + state.chapter + ' : ' + ch.name;
+    if (el) el.textContent = state.gameCompleted ? 'Partie terminée' : 'Chapitre ' + state.chapter + '/' + CHAPTERS.length;
     document.body.setAttribute('data-chapter', state.chapter);
+    if (ch) document.body.setAttribute('data-chapter-name', ch.name);
+  }
+
+  /**
+   * Le but courant, affiché en permanence sur l'accueil. C'est la réponse à
+   * « je joue pour quoi, là, maintenant » : un titre, une phrase, une barre et
+   * des chiffres. Sans ça le joueur ne voit qu'un compteur qui monte.
+   */
+  function renderChapterGoal() {
+    const card = document.getElementById('chapter-goal');
+    if (!card) return;
+    if (state.gameCompleted) {
+      const sig = 'done';
+      if (rendered.goalSig === sig) return;
+      rendered.goalSig = sig;
+      setText('chapter-goal-step', 'Fin');
+      setText('chapter-goal-name', 'Studio légendaire');
+      setText('chapter-goal-label', 'Tu as terminé la partie. Continue à faire grandir l\'agence si le cœur t\'en dit.');
+      setText('chapter-goal-value', '');
+      setText('chapter-goal-reward', '');
+      const barDone = document.getElementById('chapter-goal-fill');
+      if (barDone) barDone.style.width = '100%';
+      card.setAttribute('data-complete', 'true');
+      return;
+    }
+    const ch = getCurrentChapter();
+    if (!ch) return;
+    const p = getChapterProgress(ch);
+    if (!p) return;
+    // La barre bouge en continu : on ne redessine que si le texte change.
+    const sig = ch.id + '|' + p.text;
+    const pct = Math.round(p.ratio * 1000) / 10;
+    const fill = document.getElementById('chapter-goal-fill');
+    if (fill) fill.style.width = pct + '%';
+    if (rendered.goalSig === sig) return;
+    rendered.goalSig = sig;
+    card.setAttribute('data-complete', 'false');
+    setText('chapter-goal-step', 'Chapitre ' + ch.id + '/' + CHAPTERS.length);
+    setText('chapter-goal-name', ch.name);
+    setText('chapter-goal-label', ch.goal.label);
+    setText('chapter-goal-value', p.text);
+    const reward = [];
+    if (ch.rewardLabel) reward.push(ch.rewardLabel);
+    if (ch.unlockShort) reward.push('débloque ' + ch.unlockShort);
+    setText('chapter-goal-reward', reward.join(' · '));
+  }
+
+  /**
+   * Une ligne d'objectif. Quand l'objectif sait dire où il en est, on affiche
+   * « 3 200 / 5 000 » et une barre plutôt qu'un « En cours » qui n'apprend rien.
+   */
+  function buildQuestItem(q) {
+    var done = state.completedQuests.includes(q.id);
+    var div = document.createElement('div');
+    div.className = 'quest-item' + (done ? ' done' : '');
+    var p = (!done && typeof q.progress === 'function') ? q.progress() : null;
+    var label = done ? '✓ Fait' : 'En cours';
+    if (p && p.target > 0) {
+      label = formatNumber(Math.min(p.current, p.target)) + ' / ' + formatNumber(p.target);
+    }
+    var html = '<div class="quest-item-row"><span class="quest-name">' + escapeHtml(q.name) + '</span>'
+      + '<span class="quest-progress">' + label + '</span></div>';
+    if (p && p.target > 0) {
+      var pct = Math.round(Math.min(1, p.current / p.target) * 1000) / 10;
+      html += '<div class="quest-bar"><span class="quest-bar-fill" style="width:' + pct + '%"></span></div>';
+    }
+    div.innerHTML = html;
+    div.setAttribute('data-quest', q.id);
+    return div;
+  }
+
+  /**
+   * Rafraîchit les chiffres des objectifs sans reconstruire la liste.
+   * Les lignes sont créées une fois par renderQuests ; ici on ne touche qu'au
+   * texte et à la largeur de barre — la boucle a été optimisée pour ne plus
+   * créer d'éléments au repos, une reconstruction 4 fois par seconde la
+   * ferait régresser.
+   */
+  function updateQuestsProgress() {
+    var container = document.getElementById('quests-list');
+    if (!container) return;
+    container.querySelectorAll('.quest-item[data-quest]').forEach(function (node) {
+      var q = QUESTS.find(function (d) { return d.id === node.getAttribute('data-quest'); });
+      if (!q || typeof q.progress !== 'function') return;
+      if (state.completedQuests.includes(q.id)) return;
+      var p = q.progress();
+      if (!p || !(p.target > 0)) return;
+      var label = formatNumber(Math.min(p.current, p.target)) + ' / ' + formatNumber(p.target);
+      var labelEl = node.querySelector('.quest-progress');
+      if (labelEl && labelEl.textContent !== label) labelEl.textContent = label;
+      var fill = node.querySelector('.quest-bar-fill');
+      if (fill) fill.style.width = (Math.round(Math.min(1, p.current / p.target) * 1000) / 10) + '%';
+    });
   }
 
   function renderQuests() {
@@ -2041,13 +2512,7 @@
       empty.textContent = 'Tous les objectifs affichés ici sont accomplis. Clique sur « Voir tous les objectifs » pour la liste complète.';
       container.appendChild(empty);
     } else {
-      toShow.forEach(function (q) {
-        var done = state.completedQuests.includes(q.id);
-        var div = document.createElement('div');
-        div.className = 'quest-item' + (done ? ' done' : '');
-        div.innerHTML = '<span>' + escapeHtml(q.name) + '</span><span class="quest-progress">' + (done ? '✓ Fait' : 'En cours') + '</span>';
-        container.appendChild(div);
-      });
+      toShow.forEach(function (q) { container.appendChild(buildQuestItem(q)); });
     }
   }
 
@@ -2055,13 +2520,7 @@
     var list = document.getElementById('all-quests-modal-list');
     if (!list) return;
     list.innerHTML = '';
-    QUESTS.forEach(function (q) {
-      var done = state.completedQuests.includes(q.id);
-      var div = document.createElement('div');
-      div.className = 'quest-item' + (done ? ' done' : '');
-      div.innerHTML = '<span>' + escapeHtml(q.name) + '</span><span class="quest-progress">' + (done ? '✓ Fait' : 'En cours') + '</span>';
-      list.appendChild(div);
-    });
+    QUESTS.forEach(function (q) { list.appendChild(buildQuestItem(q)); });
   }
 
   function openAllQuestsModal() {
@@ -2095,7 +2554,7 @@
       if (def.type === 'producer') desc += ' (' + formatNumber(def.production) + '/s chacun)';
       if (def.type === 'multiplier') desc += ' (+' + ((def.multiplier || 0) * 100) + '% par unité)';
       html += '<span class="name">' + escapeHtml(def.name) + '</span><span class="desc">' + escapeHtml(desc) + '</span><div class="row"><span class="count">Possédés : ' + quantity + '</span><span class="price' + (affordable ? '' : ' too-expensive') + '">' + formatNumber(price) + ' crédits</span></div></button>';
-      if (def.promoteTo && us.quantity >= (def.promoteCost || 10)) {
+      if (def.promoteTo && isFeatureUnlocked('promotions') && us.quantity >= (def.promoteCost || 10)) {
         const toDef = getUpgradeDef(def.promoteTo);
         html += '<button type="button" class="promote-btn" data-from="' + def.id + '" data-to="' + def.promoteTo + '">Promouvoir 10 → 1 ' + (toDef ? toDef.name : '') + '</button>';
       }
@@ -2295,6 +2754,7 @@
     if (!container) return;
     container.innerHTML = '';
     OFFICE_DEFS.forEach((def) => {
+      if (def.unlocks === 'cto' && !isFeatureUnlocked('campus')) return;
       const os = getOfficeState(def.id);
       const quantity = os ? os.quantity : 0;
       const maxed = def.maxQty && quantity >= def.maxQty;
@@ -2385,12 +2845,16 @@
 
   function buyPrestigeBonus(id) {
     const def = PRESTIGE_BONUSES.find((b) => b.id === id);
-    if (!def || state.reputation < def.cost || state.purchasedPrestigeBonuses.includes(id)) return;
-    state.reputation -= def.cost;
-    state.purchasedPrestigeBonuses.push(id);
+    if (!def) return;
+    const cost = getPrestigeBonusCost(def);
+    if (state.reputation < cost) return;
+    state.reputation -= cost;
+    state.prestigeBonusLevels = state.prestigeBonusLevels || {};
+    state.prestigeBonusLevels[id] = getPrestigeBonusLevel(id) + 1;
     Object.keys(def.effect).forEach((key) => {
       state.prestigeBonuses[key] = (state.prestigeBonuses[key] || 0) + def.effect[key];
     });
+    save();
     renderReputationShop();
     renderReputation();
   }
@@ -2400,19 +2864,21 @@
     if (!container) return;
     container.innerHTML = '';
     PRESTIGE_BONUSES.forEach((def) => {
-      const owned = state.purchasedPrestigeBonuses.includes(def.id);
-      const affordable = state.reputation >= def.cost;
+      const level = getPrestigeBonusLevel(def.id);
+      const cost = getPrestigeBonusCost(def);
+      const affordable = state.reputation >= cost;
       const card = document.createElement('button');
       card.type = 'button';
       card.className = 'upgrade-card';
-      card.disabled = owned || !affordable;
+      card.disabled = !affordable;
       card.innerHTML =
-        '<span class="name">' + escapeHtml(def.name) + '</span>' +
+        '<span class="name">' + escapeHtml(def.name) + (level > 0 ? ' <span class="prestige-level">Niv. ' + level + '</span>' : '') + '</span>' +
+        '<span class="desc">' + escapeHtml(def.desc || '') + '</span>' +
         '<div class="row">' +
-        '<span class="count">' + (owned ? '✓ Acheté' : def.cost + ' Réputation') + '</span>' +
-        '<span class="price' + (affordable && !owned ? '' : ' too-expensive') + '">' + (owned ? '—' : 'Acheter') + '</span>' +
+        '<span class="count">' + cost + ' Réputation</span>' +
+        '<span class="price' + (affordable ? '' : ' too-expensive') + '">Acheter</span>' +
         '</div>';
-      if (!owned) card.addEventListener('click', () => buyPrestigeBonus(def.id));
+      card.addEventListener('click', () => buyPrestigeBonus(def.id));
       container.appendChild(card);
     });
   }
@@ -2427,8 +2893,11 @@
     const desc = document.getElementById('prestige-desc');
     if (!btn || !desc) return;
     const can = canPrestige();
+    const headstartPct = (state.prestigeBonuses && state.prestigeBonuses.headstartPercent) || 0;
     const txt = can
-      ? 'Reset et gagne ' + formatNumber(Math.floor(Math.sqrt(state.credits / PRESTIGE_THRESHOLD))) + ' Réputation. Tu perds tout sauf niveau, XP et réputation.'
+      ? 'Repars de zéro et gagne ' + formatNumber(Math.floor(Math.sqrt(state.credits / PRESTIGE_THRESHOLD))) + ' Réputation. '
+        + 'Tu perds tes crédits, tes achats, ton niveau et ton XP' + (headstartPct > 0 ? ' — tu gardes ' + headstartPct + '% de tes crédits' : '')
+        + '. Tu gardes ta Réputation, ses bonus et tes chapitres.'
       : 'Atteins ' + formatNumber(PRESTIGE_THRESHOLD) + ' crédits pour débloquer le Rebranding.';
     if (can === rendered.prestigeCan && txt === rendered.prestigeDesc) return;
     rendered.prestigeCan = can;
@@ -2445,6 +2914,7 @@
     switch (activeTab) {
       case 'accueil':
         renderClickValue();
+        renderChapterGoal();
         renderQuests();
         break;
       case 'candidats':
@@ -2486,6 +2956,7 @@
     renderClickValue();
     renderReputation();
     renderChapter();
+    renderChapterGoal();
     renderQuests();
     renderRecruitmentContracts();
     renderSkillTree();
@@ -2534,11 +3005,14 @@
     const prod = getProductionPerSecond();
     if (!(prod > 0)) return null;
     const creditedMs = Math.min(elapsed, OFFLINE_MAX_MS);
-    const gain = Math.floor(prod * (creditedMs / 1000) * OFFLINE_RATE);
+    const offlineRate = OFFLINE_RATE * (1 + ((state.prestigeBonuses && state.prestigeBonuses.offlinePercent) || 0) / 100);
+    const gain = Math.floor(prod * (creditedMs / 1000) * offlineRate);
     if (gain <= 0) return null;
 
     state.credits = (state.credits || 0) + gain;
+    state.totalCreditsEarned = (state.totalCreditsEarned || 0) + gain;
     if (state.credits > state.bestRunCredits) state.bestRunCredits = state.credits;
+    if (state.credits > (state.runPeakCredits || 0)) state.runPeakCredits = state.credits;
     // Sauvegarde immédiate : un crash avant le prochain autosave recréditerait le gain
     save();
     return { gain: gain, elapsedMs: elapsed, capped: elapsed > OFFLINE_MAX_MS };
@@ -2581,6 +3055,7 @@
     const prod = getProductionPerSecond();
     loopProd = (typeof prod === 'number' && !isNaN(prod)) ? prod : 0;
     state.credits = (typeof state.credits === 'number' && !isNaN(state.credits) ? state.credits : 0) + loopProd * dt;
+    state.totalCreditsEarned = (state.totalCreditsEarned || 0) + loopProd * dt;
     addXP(loopProd * dt * XP_PER_CREDIT);
 
     if (state.activeEvent && state.eventEndsAt && Date.now() >= state.eventEndsAt) endEvent();
@@ -2618,18 +3093,22 @@
       maybeTriggerEvent();
       maybeAgencyEvent(logicDt);
       checkQuests();
-      checkChapter();
       checkChapterObjective();
       processContrats();
     }
 
     if (state.credits > state.bestRunCredits) state.bestRunCredits = state.credits;
+    if (state.credits > (state.runPeakCredits || 0)) state.runPeakCredits = state.credits;
 
     renderLevel();
 
     if (nowMs - lastUiRefresh >= UI_REFRESH_MS) {
       lastUiRefresh = nowMs;
       renderEventTimer();
+      if (isTabActive('accueil')) {
+        renderChapterGoal();
+        updateQuestsProgress();
+      }
       updateUpgradesAffordability();
       if (isTabActive('plus')) {
         updateContratsUI();
@@ -2762,14 +3241,16 @@
     panel.appendChild(card);
   }
 
+  function showTabByName(tabName) {
+    document.querySelectorAll('.tab-btn').forEach((b) => b.classList.toggle('active', b.getAttribute('data-tab') === tabName));
+    document.querySelectorAll('.tab-panel').forEach((p) => (p.hidden = p.id !== 'tab-' + tabName));
+    activeTab = tabName;
+    resetRenderCache();
+    renderActiveTab();
+  }
+
   function initTabs() {
-    const showTab = (tabName) => {
-      document.querySelectorAll('.tab-btn').forEach((b) => b.classList.toggle('active', b.getAttribute('data-tab') === tabName));
-      document.querySelectorAll('.tab-panel').forEach((p) => (p.hidden = p.id !== 'tab-' + tabName));
-      activeTab = tabName;
-      resetRenderCache();
-      renderActiveTab();
-    };
+    const showTab = showTabByName;
     lockPlusSections();
     document.querySelectorAll('.tab-btn').forEach((btn) => {
       const tabName = btn.getAttribute('data-tab');
@@ -2806,9 +3287,23 @@
     if (!state.recruitmentContracts || state.recruitmentContracts.length === 0) generateRecruitmentContracts();
     if (!state.nextErrorRollAt) state.nextErrorRollAt = Date.now() + ERROR_ROLL_INTERVAL_MS;
 
+    // Avant tout affichage : replacer le joueur au bon chapitre. Une partie
+    // d'avant la refonte, ou simplement les gains hors-ligne, peuvent remplir
+    // plusieurs buts d'un coup — on les applique en silence.
+    catchUpChapters();
     initTabs();
+    applyChapterUnlocks();
     sanitizeEmployeesMentorship();
     const offlineReport = grantOfflineEarnings();
+    const chapitresHorsLigne = catchUpChapters();
+    applyChapterUnlocks();
+    if (chapitresHorsLigne > 0) {
+      setTimeout(function () {
+        showToast(chapitresHorsLigne === 1
+          ? 'Un chapitre a été terminé pendant ton absence.'
+          : chapitresHorsLigne + ' chapitres ont été terminés pendant ton absence.', 5000);
+      }, 1500);
+    }
     renderAll();
     renderCredits();
 
@@ -2817,6 +3312,8 @@
       gameLoop(performance.now());
     });
     document.getElementById('chapter-complete-ok')?.addEventListener('click', completeChapterAndContinue);
+    document.getElementById('game-complete-ok')?.addEventListener('click', hideGameCompleteModal);
+    document.getElementById('game-complete-modal-close')?.addEventListener('click', hideGameCompleteModal);
     document.getElementById('levelup-validate-btn')?.addEventListener('click', function () {
       if (levelUpSelectedId) {
         applyLevelBonus(levelUpSelectedId);

@@ -32,8 +32,9 @@ body.game-active {
   overflow-x: hidden;
 }
 
-/* Chapitre 2 - Petite agence locale */
-body.game-active[data-chapter="2"] {
+/* Chapitres 2-3 - le premier stagiaire, ça tourne tout seul */
+body.game-active[data-chapter="2"],
+body.game-active[data-chapter="3"] {
   --bg: #0d1a1a;
   --surface: #1a2e2e;
   --surface-alt: #254242;
@@ -41,13 +42,34 @@ body.game-active[data-chapter="2"] {
   --accent-dim: #14b8a6;
 }
 
-/* Chapitre 3 - Agence internationale */
-body.game-active[data-chapter="3"] {
+/* Chapitres 4-5 - le garage, la petite agence locale */
+body.game-active[data-chapter="4"],
+body.game-active[data-chapter="5"] {
+  --bg: #101426;
+  --surface: #1c2340;
+  --surface-alt: #283155;
+  --accent: #60a5fa;
+  --accent-dim: #3b82f6;
+}
+
+/* Chapitres 6-7 - rebranding, agence reconnue */
+body.game-active[data-chapter="6"],
+body.game-active[data-chapter="7"] {
   --bg: #1a0d1a;
   --surface: #2e1a2e;
   --surface-alt: #422542;
   --accent: #e879f9;
   --accent-dim: #d946ef;
+}
+
+/* Chapitres 8-9 - agence qui compte, studio légendaire */
+body.game-active[data-chapter="8"],
+body.game-active[data-chapter="9"] {
+  --bg: #1a1408;
+  --surface: #2c2412;
+  --surface-alt: #3f341c;
+  --accent: #fbbf24;
+  --accent-dim: #f59e0b;
 }
 
 * {
@@ -154,6 +176,7 @@ html {
 .clicker-section {
   margin-bottom: 20px;
 }
+
 
 /* Animation accueil – bloc "agence" style IDE, impactant */
 .accueil-code-anim {
@@ -389,10 +412,38 @@ html {
   background: var(--surface);
   font-size: 0.9rem;
   display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.quest-item-row {
+  display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 8px;
 }
+
+.quest-name {
+  min-width: 0;
+}
+
+.quest-bar {
+  display: block;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.quest-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  transition: width 0.35s ease;
+}
+
+.quest-item.done .quest-bar { display: none; }
 
 .quest-item.done {
   opacity: 0.7;
@@ -1437,4 +1488,180 @@ body.game-active .game-icon[src*="placeholder"] {
   .btn-code { min-height: 130px; font-size: 1.35rem; }
   .header h1 { font-size: 1.4rem; }
   .stat-value { font-size: 1.2rem; }
+}
+
+/* ===== But courant : le chapitre en cours, toujours visible sur l'accueil =====
+   C'est la réponse à « je joue pour quoi ». Elle est en tête de l'accueil,
+   avant le bouton de clic, parce qu'elle doit être lue avant d'être jouée. */
+.chapter-goal {
+  display: block;
+  margin: 0 0 14px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  background: linear-gradient(140deg, var(--surface-alt), var(--surface));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: var(--shadow);
+  animation: chapter-goal-enter 0.5s ease-out;
+}
+
+@keyframes chapter-goal-enter {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: none; }
+}
+
+.chapter-goal-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.chapter-goal-step {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.chapter-goal-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.chapter-goal-label {
+  margin: 6px 0 10px;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.chapter-goal-bar {
+  display: block;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.chapter-goal-fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent-dim), var(--accent));
+  transition: width 0.4s ease;
+}
+
+.chapter-goal-foot {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  margin-top: 10px;
+}
+
+.chapter-goal-value {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.chapter-goal-reward {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.chapter-goal[data-complete="true"] .chapter-goal-fill {
+  background: var(--accent);
+}
+
+/* ===== Fin de chapitre : ce qui est gagné, et surtout le but suivant ===== */
+.chapter-complete-name {
+  margin: 0 0 10px;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.chapter-complete-bonus,
+.chapter-complete-unlock {
+  margin: 0 0 6px;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.chapter-complete-next-label {
+  margin: 16px 0 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.chapter-complete-next {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-alt);
+  font-size: 0.88rem;
+  color: var(--text);
+}
+
+/* ===== Écran de fin ===== */
+.game-complete-kicker {
+  margin: 0 0 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.game-complete-agency {
+  margin: 4px 0 12px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.game-complete-body {
+  margin: 0 0 14px;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.game-complete-stats {
+  margin: 0 0 18px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-alt);
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+/* Niveau d'un bonus Réputation, maintenant qu'ils sont répétables */
+.prestige-level {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+/* Un onglet fermé par la progression doit vraiment disparaître.
+   `body.tapstorm-theme #game-screen .tapstorm-nav .tab-btn { display: flex }`
+   (style.css) bat l'attribut `hidden` en spécificité : c'est le piège qui a
+   déjà causé deux bugs dans ce projet. Cette règle tranche explicitement. */
+body.game-active .tapstorm-nav .tab-btn[hidden],
+body.tapstorm-theme #game-screen .tapstorm-nav .tab-btn[hidden] {
+  display: none !important;
+}
+
+.shop-section[hidden],
+.reputation-shop[hidden],
+.prestige-section[hidden] {
+  display: none !important;
 }

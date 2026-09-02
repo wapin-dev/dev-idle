@@ -59,6 +59,18 @@
       <main class="main tapstorm-main">
         <!-- Onglet Accueil : clicker + objectifs -->
         <section class="tab-panel tapstorm-panel" id="tab-accueil">
+          <section class="chapter-goal" id="chapter-goal" data-complete="false" aria-live="polite">
+            <div class="chapter-goal-head">
+              <span class="chapter-goal-step" id="chapter-goal-step">Chapitre 1/9</span>
+              <span class="chapter-goal-name" id="chapter-goal-name">Premier commit</span>
+            </div>
+            <p class="chapter-goal-label" id="chapter-goal-label">Gagner 50 crédits en codant</p>
+            <div class="chapter-goal-bar"><span class="chapter-goal-fill" id="chapter-goal-fill"></span></div>
+            <div class="chapter-goal-foot">
+              <span class="chapter-goal-value" id="chapter-goal-value">0 / 50</span>
+              <span class="chapter-goal-reward" id="chapter-goal-reward"></span>
+            </div>
+          </section>
           <section class="clicker-section">
             <div class="accueil-code-anim" aria-hidden="true">
               <div class="accueil-code-window">
@@ -143,10 +155,14 @@
         <section class="tab-panel tapstorm-panel" id="tab-boutique" hidden>
           <h2 class="panel-title">Achats directs</h2>
           <div id="upgrades-list" class="upgrades-list tapstorm-cards"></div>
-          <h3 class="section-subtitle">Bureaux</h3>
-          <div id="offices-list" class="upgrades-list tapstorm-cards"></div>
-          <h3 class="section-subtitle">Image</h3>
-          <div id="branding-list" class="upgrades-list tapstorm-cards"></div>
+          <div class="shop-section" data-chapter-feature="bureaux">
+            <h3 class="section-subtitle">Bureaux</h3>
+            <div id="offices-list" class="upgrades-list tapstorm-cards"></div>
+          </div>
+          <div class="shop-section" data-chapter-feature="branding">
+            <h3 class="section-subtitle">Image</h3>
+            <div id="branding-list" class="upgrades-list tapstorm-cards"></div>
+          </div>
         </section>
 
         <!-- Onglet Plus : International, Contrats, R&D, Réputation, Prestige -->
@@ -166,14 +182,14 @@
             <p class="tab-desc">Recherche permanente. Niveau 50+</p>
             <div id="rnd-list" class="upgrades-list tapstorm-cards"></div>
           </div>
-          <section class="reputation-shop" id="reputation-shop">
+          <section class="reputation-shop" id="reputation-shop" data-chapter-feature="reputation">
             <h2 class="panel-title">Bonus Réputation</h2>
             <div id="reputation-list" class="upgrades-list tapstorm-cards"></div>
           </section>
           <section class="best-run tapstorm-card">
             <p>Meilleur run : <span id="best-run-value">0</span> crédits</p>
           </section>
-          <section class="prestige-section tapstorm-card" id="prestige-section">
+          <section class="prestige-section tapstorm-card" id="prestige-section" data-chapter-feature="prestige">
             <button type="button" id="btn-prestige" class="tapstorm-btn tapstorm-btn-primary btn-prestige" disabled>
               <img class="game-icon prestige-btn-icon" src="/assets/icons/placeholder.svg" alt="" width="22" height="22" data-fallback="/assets/icons/placeholder.svg">
               Rebranding complet
@@ -256,9 +272,24 @@
       <div class="modal-overlay" id="chapter-complete-modal" hidden>
         <div class="modal modal-popup">
           <button type="button" class="modal-close" id="chapter-complete-modal-close" aria-label="Fermer">&times;</button>
-          <h3 class="modal-title" id="chapter-complete-title">Chapitre terminé !</h3>
-          <p id="chapter-complete-bonus"></p>
+          <h3 class="modal-title" id="chapter-complete-title">Chapitre terminé</h3>
+          <p class="chapter-complete-name" id="chapter-complete-name"></p>
+          <p class="chapter-complete-bonus" id="chapter-complete-bonus"></p>
+          <p class="chapter-complete-unlock" id="chapter-complete-unlock" hidden></p>
+          <p class="chapter-complete-next-label">Prochain but</p>
+          <p class="chapter-complete-next" id="chapter-complete-next" hidden></p>
           <button type="button" class="levelup-choice" id="chapter-complete-ok">Continuer</button>
+        </div>
+      </div>
+      <div class="modal-overlay" id="game-complete-modal" hidden>
+        <div class="modal modal-popup game-complete-modal">
+          <button type="button" class="modal-close" id="game-complete-modal-close" aria-label="Fermer">&times;</button>
+          <p class="game-complete-kicker">Dernier chapitre</p>
+          <h3 class="modal-title">Studio légendaire</h3>
+          <p class="game-complete-agency" id="game-complete-agency"></p>
+          <p class="game-complete-body">Neuf chapitres, d'un clavier dans une chambre à un studio qu'on cite en exemple. L'agence tourne sans toi maintenant.</p>
+          <p class="game-complete-stats" id="game-complete-stats"></p>
+          <button type="button" class="levelup-choice" id="game-complete-ok">Continuer à jouer</button>
         </div>
       </div>
       <div class="modal-overlay modal-require-choice" id="agency-event-modal" hidden>
