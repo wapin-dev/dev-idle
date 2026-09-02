@@ -49,7 +49,10 @@ function instrument(version) {
     "    tickInterns, INTERN_RARITIES, INTERN_TRAITS, INTERN_DRAFT_SIZE,\n" +
     "    producerMilestoneLevel, producerMilestoneMult, producerMilestoneRemaining,\n" +
     "    PRODUCER_MILESTONE_STEP, INTERN_COOLDOWN_MS, INTERN_STAGE_MS,\n" +
-    "    buyUpgrade, getUpgradeState, ensureUpgrade };\n})();");
+    "    buyUpgrade, getUpgradeState, ensureUpgrade,\n" +
+    "    SKILL_TREE, SKILL_BRANCHES, skillCost, canUnlockSkill, unlockSkill,\n" +
+    "    isSkillUnlocked, getSkillEffects, getClickPower, addXP, getXpToNextLevel,\n" +
+    "    doPrestige, checkLevelUp };\n})();");
 }
 
 function boot(seed, { migrations = null, version = undefined } = {}) {
@@ -165,10 +168,12 @@ const check = (nom, attendu, obtenu) => {
   check('v2 -> v3 : étape v2 appliquée', 8, r.data.playerLevel);
 }
 
-// 9. Étape manquante dans la table (l'étape 1 existe, la 2 non)
+// 9. Étape manquante dans la table
 {
+  // Une version au-delà de la dernière étape écrite : le numéro exact n'a pas
+  // à être maintenu à la main, sinon ce test retombe à chaque migration ajoutée.
   const seed = JSON.stringify({ credits: 10, save_version: 1 });
-  const { window, t } = boot(seed, { version: 4, migrations: null });
+  const { window, t } = boot(seed, { version: VERSION_COURANTE + 1, migrations: null });
   check('étape absente -> echec', 'echec', t.readAndMigrateSave().status);
   const bak = JSON.parse(window.localStorage.getItem(BACKUP));
   check('étape absente -> original conservé', seed, bak.raw);
@@ -448,6 +453,95 @@ function bootAvecPromo() {
   // l'attention du joueur trop souvent pour ce que le stagiaire rapporte.
   const cycleMin = (t.INTERN_STAGE_MS + t.INTERN_COOLDOWN_MS) / 60000;
   check('promos : cycle d\'au moins 5 min', true, cycleMin >= 5);
+}
+
+// 28. L'arbre est plus grand que ce qu'on peut s'offrir
+{
+  const { t } = boot(undefined);
+  const total = t.SKILL_TREE.reduce((s, n) => s + t.skillCost(n), 0);
+  // ~44 points sont gagnés en trois heures de jeu. Si l'arbre coûtait moins,
+  // on le remplirait en une session et il n'y aurait aucun choix à faire.
+  check('arbre : coûte plus que ce qu\'on gagne en 3 h', true, total > 60);
+  check('arbre : quatre voies', 4, t.SKILL_BRANCHES.length);
+  check('arbre : chaque nœud est dans une voie connue', true,
+    t.SKILL_TREE.every(n => t.SKILL_BRANCHES.some(b => b.id === n.branch)));
+  check('arbre : chaque prérequis existe', true,
+    t.SKILL_TREE.every(n => !n.requires || t.SKILL_TREE.some(o => o.id === n.requires)));
+  check('arbre : aucun identifiant en double', t.SKILL_TREE.length,
+    new Set(t.SKILL_TREE.map(n => n.id)).size);
+}
+
+// 29. Dépenser un point : prérequis, coût, effet
+{
+  const { t } = boot(undefined);
+  check('compétence : rien sans point', false, t.canUnlockSkill('p1'));
+  t.state.skillPoints = 3;
+  check('compétence : ouvrable avec les points', true, t.canUnlockSkill('p1'));
+  // p3 demande p1 : les points seuls ne suffisent pas.
+  check('compétence : prérequis manquant bloque', false, t.canUnlockSkill('p3'));
+
+  const prodAvant = t.getProductionPerSecond();
+  t.ensureUpgrade('stagiaire');
+  t.getUpgradeState('stagiaire').quantity = 10;
+  const base = t.getProductionPerSecond();
+  t.unlockSkill('p1');
+  check('compétence : point débité', 2, t.state.skillPoints);
+  check('compétence : acquise', true, t.isSkillUnlocked('p1'));
+  check('compétence : +5% de production appliqué', true,
+    Math.abs(t.getProductionPerSecond() / base - 1.05) < 0.0001);
+  check('compétence : prérequis maintenant satisfait', true, t.canUnlockSkill('p3'));
+  check('compétence : pas deux fois la même', false, t.canUnlockSkill('p1'));
+}
+
+// 30. Une montée de niveau donne un point, sans modale
+{
+  const { t, window } = boot(undefined);
+  const avant = t.state.skillPoints || 0;
+  t.state.playerXP = t.getXpToNextLevel();
+  t.checkLevelUp();
+  check('niveau : un point de plus', avant + 1, t.state.skillPoints);
+  // L'ancienne modale de choix de bonus a été retirée du DOM avec son système :
+  // vérifier qu'elle ne s'ouvre pas ne suffirait pas, on vérifie qu'elle n'est
+  // plus là du tout — sinon un jour on la rebranche sans s'en apercevoir.
+  check('niveau : plus de modale de niveau dans la page', null,
+    window.document.getElementById('levelup-modal'));
+  check('niveau : rien ne reste en attente', false, t.state.pendingLevelUp);
+
+  // Plusieurs niveaux d'un coup (retour hors-ligne, gros achat) doivent tous
+  // être crédités : l'ancienne garde `pendingLevelUp` n'en passait qu'un.
+  const p2 = t.state.skillPoints;
+  t.state.playerXP = t.getXpToNextLevel() * 4;
+  t.checkLevelUp();
+  check('niveau : plusieurs niveaux d\'un coup crédités', true, t.state.skillPoints >= p2 + 2);
+}
+
+// 31. L'arbre survit au Rebranding
+{
+  const { t } = boot(undefined);
+  t.state.skillPoints = 5;
+  t.unlockSkill('p1');
+  t.state.credits = 1e9;
+  t.state.unlockedFeatures = ['prestige'];
+  t.state.playerLevel = 30;
+  t.doPrestige();
+  check('rebranding : niveau remis à 1', 1, t.state.playerLevel);
+  check('rebranding : la compétence est gardée', true, t.isSkillUnlocked('p1'));
+  check('rebranding : les points non dépensés sont gardés', 4, t.state.skillPoints);
+}
+
+// 32. Migration 3 -> 4 : une partie en cours ne perd pas ses niveaux
+{
+  const seed = JSON.stringify({
+    credits: 5000, playerLevel: 18, playerXP: 40, pendingLevelUp: true,
+    levelBonuses: { prodPercent: 12 }, save_version: 3,
+  });
+  const { t } = boot(seed);
+  const r = t.readAndMigrateSave();
+  check('v3 -> v4 : statut ok', 'ok', r.status);
+  // 17 niveaux acquis au-delà du premier, + 1 pour le level-up en attente.
+  check('v3 -> v4 : niveaux convertis en points', 18, r.data.skillPoints);
+  check('v3 -> v4 : anciens bonus effacés', {}, r.data.levelBonuses);
+  check('v3 -> v4 : plus rien en attente', false, r.data.pendingLevelUp);
 }
 
 const echecs = results.filter(r => !r.ok);

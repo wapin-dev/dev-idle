@@ -2089,3 +2089,138 @@ body.eureka-active #agency-scene .agency-typing {
   font-weight: 600;
   color: #fbbf24;
 }
+
+/* ===== L'arbre de compétences ==============================================
+   Une colonne par voie, les nœuds rangés par étage. La couleur de la branche
+   passe par --branche, posée en style inline au rendu. */
+.skill-badge {
+  border: 1px solid rgba(251, 191, 36, 0.6);
+  background: rgba(251, 191, 36, 0.16);
+  color: #fbbf24;
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 2px 9px;
+  border-radius: 999px;
+  cursor: pointer;
+  animation: skill-badge-pulse 2s ease-in-out infinite;
+}
+
+.skill-badge[hidden] { display: none !important; }
+
+@keyframes skill-badge-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0); }
+  50% { box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.18); }
+}
+
+.skill-modal { max-width: 560px; }
+
+.skill-branches {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-height: 62vh;
+  overflow-y: auto;
+  text-align: left;
+}
+
+.skill-branch-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.skill-branch-name {
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--branche);
+  letter-spacing: 0.02em;
+}
+
+.skill-branch-count {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--branche);
+  opacity: 0.75;
+}
+
+.skill-branch-desc {
+  margin: 2px 0 10px;
+  font-size: 0.74rem;
+  line-height: 1.35;
+  color: #a5b4fc;
+}
+
+.skill-node {
+  display: block;
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #f1f1f4;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.skill-node-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.skill-node-name { font-size: 0.84rem; font-weight: 700; }
+
+.skill-node-cost {
+  flex: none;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--branche);
+}
+
+.skill-node-desc {
+  display: block;
+  margin-top: 3px;
+  font-size: 0.73rem;
+  line-height: 1.35;
+  color: #a5b4fc;
+}
+
+.skill-node-req {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.68rem;
+  font-style: italic;
+  color: #6f6791;
+}
+
+/* Quatre états, quatre lectures : acquis, à portée, trop cher, verrouillé.
+   « Trop cher » et « verrouillé » doivent se distinguer sans lire le texte —
+   sinon le joueur croit qu'il lui manque des points alors qu'il lui manque
+   le nœud précédent. */
+.skill-node[data-etat="acquis"] {
+  border-color: var(--branche);
+  background: color-mix(in srgb, var(--branche) 16%, transparent);
+  cursor: default;
+}
+
+.skill-node[data-etat="ouvrable"] {
+  border-color: var(--branche);
+  box-shadow: 0 0 0 1px var(--branche) inset, 0 4px 14px rgba(0, 0, 0, 0.3);
+}
+
+.skill-node[data-etat="cher"] { opacity: 0.55; cursor: not-allowed; }
+
+.skill-node[data-etat="bloque"] {
+  opacity: 0.42;
+  cursor: not-allowed;
+  border-style: dashed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skill-badge { animation: none; }
+}

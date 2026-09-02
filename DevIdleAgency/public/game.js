@@ -8,7 +8,7 @@
    * progression de quelqu'un sans en garder une trace récupérable.
    */
   const SAVE_BACKUP_KEY = SAVE_KEY + '-backup';
-  const SAVE_VERSION = 3;
+  const SAVE_VERSION = 4;
 
   /**
    * Migrations de sauvegarde.
@@ -99,6 +99,28 @@
         var dejaAvance = Math.max(data.bestRunCredits || 0, data.runPeakCredits || 0, data.credits || 0) >= 10000;
         data.internsHired = dejaAvance ? 1 : 0;
       }
+      return data;
+    },
+    /**
+     * 3 → 4 : l'arbre de compétences remplace les bonus de montée de niveau.
+     *
+     * Une partie en cours a déjà payé ses niveaux : on lui rend un point par
+     * niveau au-delà du premier, sinon elle perdrait tout ce qu'elle avait
+     * gagné. Les anciens `levelBonuses` sont effacés — leurs effets vivent
+     * désormais dans l'arbre, et les laisser les compterait deux fois.
+     *
+     * Un level-up resté en attente est absorbé : sa modale n'existe plus, et
+     * `pendingLevelUp` à vrai bloquerait toutes les montées suivantes.
+     */
+    3: function (data) {
+      var niveau = typeof data.playerLevel === 'number' ? data.playerLevel : 1;
+      var acquis = Math.max(0, niveau - 1);
+      if (data.pendingLevelUp) acquis += 1;
+      data.skillPoints = (typeof data.skillPoints === 'number' ? data.skillPoints : 0) + acquis;
+      if (!Array.isArray(data.skills)) data.skills = [];
+      data.levelBonuses = {};
+      data.levelUpChoices = [];
+      data.pendingLevelUp = false;
       return data;
     },
   };
@@ -417,14 +439,6 @@
    */
   const CHAPTER_FEATURES = ['boutique', 'stagiaires', 'events', 'promotions', 'bureaux', 'branding', 'prestige', 'reputation', 'campus'];
 
-  const LEVEL_BONUSES = [
-    { id: 'prod2', name: '+2% production', desc: 'Bonus permanent sur la prod passive', effect: { prodPercent: 2 } },
-    { id: 'click1', name: '+1% clics', desc: 'Chaque clic rapporte plus', effect: { clickPercent: 1 } },
-    { id: 'event5', name: '+5% chance event bonus', desc: 'Plus de Hackathons, moins de clients toxiques', effect: { eventBonusChance: 5 } },
-    { id: 'prod3', name: '+3% production', desc: 'Bonus permanent sur la prod passive', effect: { prodPercent: 3 } },
-    { id: 'click2', name: '+2% clics', desc: 'Chaque clic rapporte plus', effect: { clickPercent: 2 } },
-    { id: 'xp10', name: '+10% XP', desc: 'Tu gagnes de l\'XP plus vite', effect: { xpPercent: 10 } },
-  ];
 
   const EVENTS = {
     clientToxique: {
@@ -482,17 +496,166 @@
    */
   const PRODUCER_MILESTONE_STEP = 25;
 
+  /** Le pas réel, que l'arbre de compétences peut resserrer. */
+  function producerMilestoneStep() {
+    const reduc = getSkillEffects().milestoneStepReduction || 0;
+    return Math.max(5, PRODUCER_MILESTONE_STEP - reduc);
+  }
+
+  /** Le facteur d'un palier : 2 de base, que l'arbre peut pousser plus haut. */
+  function producerMilestoneBase() {
+    return 2 + (getSkillEffects().milestoneBase || 0);
+  }
+
   function producerMilestoneLevel(quantity) {
-    return Math.floor((quantity || 0) / PRODUCER_MILESTONE_STEP);
+    return Math.floor((quantity || 0) / producerMilestoneStep());
   }
 
   function producerMilestoneMult(quantity) {
-    return Math.pow(2, producerMilestoneLevel(quantity));
+    return Math.pow(producerMilestoneBase(), producerMilestoneLevel(quantity));
+  }
+
+  /** Le multiplicateur tel qu'on l'écrit : « ×2,2 » plutôt que « ×2.2000004 ». */
+  function producerMilestoneLabel(mult) {
+    return Math.round(mult * 10) / 10;
   }
 
   /** Combien il en reste à acheter avant le palier suivant. */
   function producerMilestoneRemaining(quantity) {
-    return PRODUCER_MILESTONE_STEP - ((quantity || 0) % PRODUCER_MILESTONE_STEP);
+    const pas = producerMilestoneStep();
+    return pas - ((quantity || 0) % pas);
+  }
+
+  /* ==========================================================================
+     L'arbre de compétences
+
+     Il remplace les anciens bonus de montée de niveau, et surtout la modale qui
+     les accompagnait : elle s'ouvrait à chaque niveau — 44 fois sur trois
+     heures de jeu, 15 dans la première heure — pour faire choisir entre « +2%
+     production » et « +3% production ». Le même faux choix, en boucle, au
+     milieu de la partie.
+
+     Ici, un niveau donne un point. Le point s'accumule, et le joueur ouvre
+     l'arbre quand ça l'arrange : l'interruption ne diminue pas, elle disparaît.
+
+     L'arbre est délibérément plus grand que ce qu'on peut s'offrir — environ 70
+     points pour tout prendre, contre ~44 gagnés en trois heures. On ne remplit
+     pas l'arbre, on choisit une voie. C'est ce qui en fait un arbre plutôt
+     qu'une liste de courses.
+
+     Il SURVIT au Rebranding, comme les chapitres. C'est ce qui donne enfin une
+     raison de le faire : on perd ses producteurs, on garde son arbre.
+     ========================================================================== */
+
+  const SKILL_BRANCHES = [
+    { id: 'prod', name: 'Production', desc: 'L\'agence produit plus, en continu.', color: '#a78bfa' },
+    { id: 'click', name: 'Clic', desc: 'Pour qui joue manette en main.', color: '#4ade80' },
+    { id: 'intern', name: 'Stagiaires', desc: 'Des promos plus riches, des stages plus rentables.', color: '#fbbf24' },
+    { id: 'meta', name: 'Absence & Rebranding', desc: 'Ce que rapporte le temps passé loin du jeu.', color: '#22d3ee' },
+  ];
+
+  /** Coût d'un nœud selon son étage. Monter coûte de plus en plus cher. */
+  const SKILL_TIER_COST = { 1: 1, 2: 2, 3: 3, 4: 5 };
+
+  const SKILL_TREE = [
+    /* --- Production --- */
+    { id: 'p1', branch: 'prod', tier: 1, name: 'Second écran', desc: '+5% de production.', requires: null, effect: { prodPercent: 5 } },
+    { id: 'p2', branch: 'prod', tier: 1, name: 'Chaises correctes', desc: '+5% de production.', requires: null, effect: { prodPercent: 5 } },
+    { id: 'p3', branch: 'prod', tier: 2, name: 'Revue de code', desc: '+12% de production.', requires: 'p1', effect: { prodPercent: 12 } },
+    { id: 'p4', branch: 'prod', tier: 2, name: 'Machine à café d\'étage', desc: '+12% de production.', requires: 'p2', effect: { prodPercent: 12 } },
+    { id: 'p5', branch: 'prod', tier: 3, name: 'Intégration continue', desc: '+25% de production.', requires: 'p3', effect: { prodPercent: 25 } },
+    { id: 'p6', branch: 'prod', tier: 3, name: 'Paliers rapprochés', desc: 'Les paliers de producteur tombent tous les 20 au lieu de 25.', requires: 'p4', effect: { milestoneStepReduction: 5 } },
+    { id: 'p7', branch: 'prod', tier: 4, name: 'Culture d\'ingénierie', desc: 'Production ×1,5.', requires: 'p5', effect: { prodMultiplier: 0.5 } },
+    { id: 'p8', branch: 'prod', tier: 4, name: 'Usine logicielle', desc: 'Les paliers doublent un peu plus fort (×2,2 au lieu de ×2).', requires: 'p6', effect: { milestoneBase: 0.2 } },
+
+    /* --- Clic --- */
+    { id: 'c1', branch: 'click', tier: 1, name: 'Raccourcis clavier', desc: '+15% par clic.', requires: null, effect: { clickPercent: 15 } },
+    { id: 'c2', branch: 'click', tier: 1, name: 'Mécanique bleue', desc: '+15% par clic.', requires: null, effect: { clickPercent: 15 } },
+    { id: 'c3', branch: 'click', tier: 2, name: 'Rythme de croisière', desc: '+40% par clic.', requires: 'c1', effect: { clickPercent: 40 } },
+    { id: 'c4', branch: 'click', tier: 2, name: 'Commit atomique', desc: '+40% par clic.', requires: 'c2', effect: { clickPercent: 40 } },
+    { id: 'c5', branch: 'click', tier: 3, name: 'Flow', desc: '+100% par clic.', requires: 'c3', effect: { clickPercent: 100 } },
+    { id: 'c6', branch: 'click', tier: 3, name: 'Livraison continue', desc: 'Chaque clic rapporte en plus 1 seconde de production passive.', requires: 'c4', effect: { clickProdSeconds: 1 } },
+    { id: 'c7', branch: 'click', tier: 4, name: 'Dix doigts', desc: 'Chaque clic rapporte 3 secondes de production au lieu d\'une.', requires: 'c6', effect: { clickProdSeconds: 2 } },
+
+    /* --- Stagiaires --- */
+    { id: 's1', branch: 'intern', tier: 1, name: 'Annonce soignée', desc: 'Les stages durent 15% de moins.', requires: null, effect: { internStagePercent: -15 } },
+    { id: 's2', branch: 'intern', tier: 1, name: 'Bureau d\'accueil', desc: 'Embaucher coûte 20% de moins.', requires: null, effect: { internHirePercent: -20 } },
+    { id: 's3', branch: 'intern', tier: 2, name: 'Mentorat', desc: '+30% de chance d\'Eurêka.', requires: 's1', effect: { internEurekaChancePercent: 30 } },
+    { id: 's4', branch: 'intern', tier: 2, name: 'Prime d\'embauche', desc: 'Le bonus définitif laissé par un embauché est majoré de moitié.', requires: 's2', effect: { internHireBonusPercent: 50 } },
+    { id: 's5', branch: 'intern', tier: 3, name: 'Eurêka prolongé', desc: 'Les Eurêka durent 40% plus longtemps.', requires: 's3', effect: { internEurekaMsPercent: 40 } },
+    { id: 's6', branch: 'intern', tier: 3, name: 'Partenariat école', desc: 'Les promos arrivent deux fois plus vite.', requires: 's4', effect: { internCooldownPercent: -50 } },
+    { id: 's7', branch: 'intern', tier: 4, name: 'Réseau d\'écoles', desc: 'Une promo présente 4 candidats au lieu de 3.', requires: 's5', effect: { internDraftSize: 1 } },
+    { id: 's8', branch: 'intern', tier: 4, name: 'Chasseur de têtes', desc: 'Les Pépites sortent deux fois plus souvent.', requires: 's6', effect: { internRarityBoost: 1 } },
+
+    /* --- Absence & Rebranding --- */
+    { id: 'm1', branch: 'meta', tier: 1, name: 'Astreinte', desc: '+15% de rendement pendant ton absence.', requires: null, effect: { offlinePercent: 15 } },
+    { id: 'm2', branch: 'meta', tier: 1, name: 'Sauvegarde continue', desc: 'L\'absence est créditée jusqu\'à 12 h au lieu de 8.', requires: null, effect: { offlineCapHours: 4 } },
+    { id: 'm3', branch: 'meta', tier: 2, name: 'Équipe de nuit', desc: '+30% de rendement pendant ton absence.', requires: 'm1', effect: { offlinePercent: 30 } },
+    { id: 'm4', branch: 'meta', tier: 2, name: 'Notoriété', desc: '+30% de réputation gagnée au Rebranding.', requires: 'm2', effect: { reputationPercent: 30 } },
+    { id: 'm5', branch: 'meta', tier: 3, name: 'Trésorerie', desc: 'Tu gardes 10% de tes crédits au Rebranding.', requires: 'm3', effect: { headstartPercent: 10 } },
+    { id: 'm6', branch: 'meta', tier: 3, name: 'Agence reconnue', desc: '+60% de réputation gagnée au Rebranding.', requires: 'm4', effect: { reputationPercent: 60 } },
+    { id: 'm7', branch: 'meta', tier: 4, name: 'Héritage', desc: 'Tu gardes 25% de tes crédits au Rebranding.', requires: 'm5', effect: { headstartPercent: 15 } },
+  ];
+
+  function getSkillDef(id) { return SKILL_TREE.find((s) => s.id === id); }
+  function skillCost(def) { return SKILL_TIER_COST[def.tier] || 1; }
+  function isSkillUnlocked(id) { return (state.skills || []).indexOf(id) >= 0; }
+
+  function canUnlockSkill(id) {
+    const def = getSkillDef(id);
+    if (!def || isSkillUnlocked(id)) return false;
+    if (def.requires && !isSkillUnlocked(def.requires)) return false;
+    return (state.skillPoints || 0) >= skillCost(def);
+  }
+
+  /**
+   * Les effets de l'arbre, additionnés une fois pour toutes.
+   *
+   * Recalculer à chaque appel coûterait cher : `getProductionPerSecond()` est
+   * appelée dix fois par seconde par la boucle. Le cache est invalidé à chaque
+   * déblocage, au chargement et au Rebranding — les trois seuls moments où la
+   * liste des compétences change.
+   */
+  var skillEffectsCache = null;
+
+  function invalidateSkillEffects() { skillEffectsCache = null; }
+
+  function getSkillEffects() {
+    if (skillEffectsCache) return skillEffectsCache;
+    const e = {
+      prodPercent: 0, prodMultiplier: 0, clickPercent: 0, clickProdSeconds: 0,
+      milestoneStepReduction: 0, milestoneBase: 0,
+      internStagePercent: 0, internHirePercent: 0, internEurekaChancePercent: 0,
+      internEurekaMsPercent: 0, internHireBonusPercent: 0, internCooldownPercent: 0,
+      internDraftSize: 0, internRarityBoost: 0,
+      offlinePercent: 0, offlineCapHours: 0, reputationPercent: 0, headstartPercent: 0,
+    };
+    (state.skills || []).forEach((id) => {
+      const def = getSkillDef(id);
+      if (!def || !def.effect) return;
+      Object.keys(def.effect).forEach((k) => { e[k] = (e[k] || 0) + def.effect[k]; });
+    });
+    skillEffectsCache = e;
+    return e;
+  }
+
+  function unlockSkill(id) {
+    if (!canUnlockSkill(id)) return false;
+    const def = getSkillDef(id);
+    state.skillPoints -= skillCost(def);
+    state.skills = state.skills || [];
+    state.skills.push(id);
+    invalidateSkillEffects();
+    save();
+    renderSkillTreeModal();
+    renderAll();
+    showToast(def.name + ' débloqué.', 2600);
+    return true;
+  }
+
+  /** Points dépensables : sert au badge de l'en-tête. */
+  function hasSpendableSkill() {
+    return SKILL_TREE.some((def) => canUnlockSkill(def.id));
   }
 
   const MANAGER_DEFS = [
@@ -760,6 +923,10 @@
     prestigeCount: 0,
     /** Passe à vrai une fois le dernier chapitre terminé. */
     gameCompleted: false,
+    /** Points de compétence non dépensés. Un par niveau gagné. */
+    skillPoints: 0,
+    /** Compétences débloquées. Survit au Rebranding, comme les chapitres. */
+    skills: [],
     /** Le stagiaire en stage, ou null. Voir le bloc « Les stagiaires ». */
     intern: null,
     /** Les 3 candidats d'une promo en attente de choix, ou null. */
@@ -1145,30 +1312,33 @@
     } catch (e) { console.warn('addXP error', e); }
   }
 
+  /**
+   * Une montée de niveau donne un point de compétence, et rien d'autre.
+   *
+   * Elle ouvrait avant une modale bloquante pour choisir entre « +2%
+   * production » et « +3% production » — 44 fois sur trois heures de jeu, 15
+   * dans la première heure. Le point s'accumule et se dépense quand le joueur
+   * le décide : plus rien ne l'interrompt.
+   *
+   * La boucle `while` remplace la garde `pendingLevelUp` : plusieurs niveaux
+   * peuvent tomber d'un coup (retour hors-ligne, gros achat) et il faut les
+   * créditer tous.
+   */
   function checkLevelUp() {
-    const needed = getXpToNextLevel();
-    if (state.playerXP < needed || state.pendingLevelUp) return;
-    state.playerXP -= needed;
-    state.playerLevel += 1;
-    state.pendingLevelUp = true;
-    // Tant que le rapport hors-ligne est ouvert, on garde le level-up en file :
-    // hideOfflineModal l'ouvrira. pendingLevelUp reste vrai entre-temps.
-    if (!isOfflineModalOpen()) showLevelUpModal();
-    save();
-  }
-
-  function applyLevelBonus(bonusId) {
-    const bonus = LEVEL_BONUSES.find((b) => b.id === bonusId);
-    if (!bonus || !bonus.effect) return;
-    Object.keys(bonus.effect).forEach((key) => {
-      const val = bonus.effect[key];
-      state.levelBonuses[key] = (state.levelBonuses[key] || 0) + val;
-    });
+    let gagnes = 0;
+    while (state.playerXP >= getXpToNextLevel()) {
+      state.playerXP -= getXpToNextLevel();
+      state.playerLevel += 1;
+      state.skillPoints = (state.skillPoints || 0) + 1;
+      gagnes++;
+      if (gagnes > 500) break;  // garde-fou : une XP aberrante ne doit pas figer la boucle
+    }
+    if (!gagnes) return;
     state.pendingLevelUp = false;
-    state.levelUpChoices = null;
-    hideLevelUpModal();
+    renderSkillBadge();
+    showToast('Niveau ' + state.playerLevel + ' — ' +
+      (gagnes > 1 ? gagnes + ' points de compétence' : '1 point de compétence') + ' à dépenser.', 3200);
     save();
-    renderAll();
   }
 
   function getUpgradeDef(id) {
@@ -1285,6 +1455,10 @@
     // Stagiaires : le bonus du stage en cours, celui laissé par les embauchés,
     // puis l'Eurêka. L'Eurêka vient en dernier et multiplie tout le reste —
     // c'est ce qui en fait un « gros progrès » et pas un bonus de plus.
+    const sk = getSkillEffects();
+    total *= 1 + sk.prodPercent / 100;
+    total *= 1 + sk.prodMultiplier;
+
     total *= 1 + getInternProdPercent() / 100;
     total *= 1 + (state.internHireBonusPercent || 0) / 100;
     total *= getEurekaMultiplier();
@@ -1296,6 +1470,7 @@
     let mult = 1;
     const levelClick = (state.levelBonuses.clickPercent || 0) + (state.prestigeBonuses.clickPercent || 0);
     mult *= 1 + levelClick / 100;
+    mult *= 1 + getSkillEffects().clickPercent / 100;
 
     (state.offices || []).forEach((os) => {
       const def = getOfficeDef(os.id);
@@ -1342,7 +1517,7 @@
     // producteur. Sans annonce, le joueur voit juste un chiffre bouger.
     if (def.type === 'producer' && producerMilestoneLevel(us.quantity) > paliersAvant) {
       showToast(us.quantity + ' ' + def.name.toLowerCase() + 's — palier atteint, leur production passe à ×' +
-        producerMilestoneMult(us.quantity) + '.', 4000);
+        producerMilestoneLabel(producerMilestoneMult(us.quantity)) + '.', 4000);
     }
     addXP(price * XP_PER_CREDIT);
     renderUpgrades();
@@ -1646,8 +1821,10 @@
     const rarityId = pickInternRarityId();
     const rarity = getInternRarity(rarityId);
     const trait = pickRandom(internTraitPool(rarity));
+    const sk = getSkillEffects();
     const prodPercent = Math.round(rarity.prodPercent * (trait.prodMult || 1) * 10) / 10;
-    const hireBonusPercent = Math.round(rarity.hireBonusPercent * (trait.hireBonusMult || 1) * 10) / 10;
+    const hireBonusPercent = Math.round(rarity.hireBonusPercent * (trait.hireBonusMult || 1) *
+      (1 + sk.internHireBonusPercent / 100) * 10) / 10;
     return {
       id: randomId(),
       name: pickRandom(FIRST_NAMES) + ' ' + pickRandom(LAST_NAMES),
@@ -1655,11 +1832,11 @@
       traitId: trait.id,
       prodPercent: prodPercent,
       hireBonusPercent: hireBonusPercent,
-      eurekaChance: rarity.eurekaChance * (trait.eurekaChanceMult || 1),
+      eurekaChance: rarity.eurekaChance * (trait.eurekaChanceMult || 1) * (1 + sk.internEurekaChancePercent / 100),
       eurekaMultiplier: rarity.eurekaMultiplier,
-      eurekaMs: Math.round(rarity.eurekaMs * (trait.eurekaMsMult || 1)),
-      stageMs: Math.round(INTERN_STAGE_MS * (trait.stageMult || 1)),
-      costFactor: rarity.costFactor * (trait.costMult || 1),
+      eurekaMs: Math.round(rarity.eurekaMs * (trait.eurekaMsMult || 1) * (1 + sk.internEurekaMsPercent / 100)),
+      stageMs: Math.round(INTERN_STAGE_MS * (trait.stageMult || 1) * (1 + sk.internStagePercent / 100)),
+      costFactor: rarity.costFactor * (trait.costMult || 1) * (1 + sk.internHirePercent / 100),
     };
   }
 
@@ -1678,7 +1855,8 @@
     if (!isFeatureUnlocked('stagiaires')) return;
     if (state.intern || state.internDraft) return;
     const candidates = [];
-    for (let i = 0; i < INTERN_DRAFT_SIZE; i++) candidates.push(generateInternCandidate());
+    const taille = INTERN_DRAFT_SIZE + getSkillEffects().internDraftSize;
+    for (let i = 0; i < taille; i++) candidates.push(generateInternCandidate());
     state.internDraft = { candidates: candidates, createdAt: Date.now() };
     save();
   }
@@ -1772,7 +1950,8 @@
     state.intern = null;
     state.eurekaUntil = 0;
     state.nextEurekaRollAt = 0;
-    state.nextInternDraftAt = Date.now() + INTERN_COOLDOWN_MS;
+    state.nextInternDraftAt = Date.now() +
+      INTERN_COOLDOWN_MS * (1 + getSkillEffects().internCooldownPercent / 100);
     hideInternEndModal();
     save();
     renderIntern();
@@ -1939,9 +2118,10 @@
 
   function doPrestige() {
     if (!canPrestige() || !isFeatureUnlocked('prestige')) return;
-    const repGain = Math.floor(Math.sqrt(state.credits / PRESTIGE_THRESHOLD));
+    const sk = getSkillEffects();
+    const repGain = Math.floor(Math.sqrt(state.credits / PRESTIGE_THRESHOLD) * (1 + sk.reputationPercent / 100));
     state.reputation += repGain;
-    const headstart = ((state.prestigeBonuses && state.prestigeBonuses.headstartPercent) || 0) / 100;
+    const headstart = (((state.prestigeBonuses && state.prestigeBonuses.headstartPercent) || 0) + sk.headstartPercent) / 100;
     state.credits = Math.floor(state.credits * headstart);
     state.upgrades.forEach((u) => (u.quantity = 0));
     state.offices.forEach((o) => (o.quantity = 0));
@@ -1955,6 +2135,9 @@
     state.playerLevel = 1;
     state.playerXP = 0;
     state.levelBonuses = {};
+    // `state.skills` et `state.skillPoints` ne sont PAS réinitialisés : l'arbre
+    // est la progression permanente, et c'est ce qui rend le Rebranding
+    // acceptable — on perd ses producteurs, on garde son arbre.
     state.completedQuests = [];
     state.prestigeCount = (state.prestigeCount || 0) + 1;
     // Les chapitres ne sont PAS remis à zéro : c'est la progression permanente
@@ -2032,6 +2215,8 @@
         runPeakCredits: state.runPeakCredits,
         prestigeCount: state.prestigeCount,
         gameCompleted: state.gameCompleted,
+        skillPoints: state.skillPoints,
+        skills: state.skills,
         prestigeBonusLevels: state.prestigeBonusLevels,
         intern: state.intern,
         internDraft: state.internDraft,
@@ -2209,6 +2394,9 @@
       if (typeof data.runPeakCredits === 'number') state.runPeakCredits = data.runPeakCredits;
       if (typeof data.prestigeCount === 'number') state.prestigeCount = data.prestigeCount;
       if (typeof data.gameCompleted === 'boolean') state.gameCompleted = data.gameCompleted;
+      if (typeof data.skillPoints === 'number') state.skillPoints = data.skillPoints;
+      if (Array.isArray(data.skills)) state.skills = data.skills.filter(getSkillDef);
+      invalidateSkillEffects();
       if (data.prestigeBonusLevels) state.prestigeBonusLevels = data.prestigeBonusLevels;
       if (data.intern && typeof data.intern === 'object') state.intern = data.intern;
       if (data.internDraft && Array.isArray(data.internDraft.candidates)) state.internDraft = data.internDraft;
@@ -2266,56 +2454,7 @@
     return 'ok';
   }
 
-  var levelUpSelectedId = null;
 
-  function showLevelUpModal() {
-    const modal = document.getElementById('levelup-modal');
-    const levelEl = document.getElementById('levelup-level');
-    const choicesEl = document.getElementById('levelup-choices');
-    const validateBtn = document.getElementById('levelup-validate-btn');
-    if (!modal || !levelEl || !choicesEl) return;
-    levelUpSelectedId = null;
-    if (validateBtn) validateBtn.disabled = true;
-    levelEl.textContent = state.playerLevel;
-    let pool = (state.levelUpChoices || [])
-      .map((id) => LEVEL_BONUSES.find((b) => b.id === id))
-      .filter(Boolean);
-    if (pool.length < 3) {
-      pool = [...LEVEL_BONUSES].sort(() => Math.random() - 0.5).slice(0, 3);
-      state.levelUpChoices = pool.map((b) => b.id);
-    }
-    choicesEl.innerHTML = '';
-    pool.forEach((b) => {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'levelup-choice';
-      btn.setAttribute('data-bonus-id', b.id);
-      btn.innerHTML = '<span class="choice-name">' + escapeHtml(b.name) + '</span><span class="choice-desc">' + escapeHtml(b.desc) + '</span>';
-      btn.addEventListener('click', function () {
-        levelUpSelectedId = b.id;
-        choicesEl.querySelectorAll('.levelup-choice').forEach((x) => x.classList.remove('selected'));
-        btn.classList.add('selected');
-        if (validateBtn) {
-          validateBtn.disabled = false;
-        }
-      });
-      choicesEl.appendChild(btn);
-    });
-    modal.hidden = false;
-  }
-
-  function hideLevelUpModal() {
-    const modal = document.getElementById('levelup-modal');
-    if (modal) modal.hidden = true;
-  }
-
-  /**
-   * Fin de chapitre. On annonce trois choses, dans cet ordre : ce qui vient
-   * d'être accompli, ce que ça rapporte, et surtout ce qu'il faut viser
-   * maintenant — le joueur ne doit jamais refermer cette modale sans savoir
-   * quel est son prochain but.
-   * @param {object} ch chapitre qui vient d'être terminé
-   */
   function showChapterCompleteModal(ch) {
     const modal = document.getElementById('chapter-complete-modal');
     if (!modal || !ch) return;
@@ -3120,7 +3259,7 @@
       const cases = dessines + (n > SCENE_MAX_SLOTS ? 1 : 0) + casePalier;
       const x0 = xMin + Math.max(0, ((xMax - xMin) - cases * SCENE_PITCH) / 2);
       let g = '';
-      if (casePalier) g += sceneMilestone(x0, y, mult);
+      if (casePalier) g += sceneMilestone(x0, y, producerMilestoneLabel(mult));
       const xPostes = x0 + casePalier * SCENE_PITCH;
       for (let k = 0; k < dessines; k++) {
         // Nouveau = ce poste n'était pas là la dernière fois que le joueur a
@@ -3280,6 +3419,82 @@
     if (fill) fill.style.width = Math.max(0, Math.min(100, ratio * 100)) + '%';
     const banner = document.getElementById('intern-eureka-banner');
     if (banner) banner.hidden = !isEurekaActive();
+  }
+
+  /* --- L'arbre de compétences : affichage --- */
+
+  /**
+   * La pastille de l'en-tête. Elle n'apparaît que s'il y a quelque chose à
+   * dépenser *maintenant* : afficher « 3 pt » alors que le prochain nœud en
+   * coûte 5 enverrait le joueur ouvrir une modale pour rien.
+   */
+  function renderSkillBadge() {
+    const badge = document.getElementById('skill-badge');
+    if (!badge) return;
+    const pts = state.skillPoints || 0;
+    const montrer = pts > 0 && hasSpendableSkill();
+    badge.hidden = !montrer;
+    if (montrer) setText('skill-badge-count', pts);
+  }
+
+  function openSkillModal() {
+    renderSkillTreeModal();
+    const modal = document.getElementById('skill-modal');
+    if (modal) modal.hidden = false;
+  }
+
+  function closeSkillModal() {
+    const modal = document.getElementById('skill-modal');
+    if (modal) modal.hidden = true;
+  }
+
+  /**
+   * L'arbre, une colonne par voie. Les nœuds sont rangés par étage : un joueur
+   * doit voir d'un coup d'œil où mène chaque branche, et ce qu'il lui manque.
+   */
+  function renderSkillTreeModal() {
+    const cont = document.getElementById('skill-branches');
+    if (!cont) return;
+    const pts = state.skillPoints || 0;
+    setText('skill-modal-points', pts === 0 ? 'Aucun point à dépenser'
+      : pts + (pts > 1 ? ' points à dépenser' : ' point à dépenser'));
+
+    cont.innerHTML = SKILL_BRANCHES.map(function (br) {
+      const noeuds = SKILL_TREE.filter((n) => n.branch === br.id)
+        .sort((a, b) => a.tier - b.tier);
+      const pris = noeuds.filter((n) => isSkillUnlocked(n.id)).length;
+      return '<section class="skill-branch" style="--branche:' + br.color + '">' +
+        '<header class="skill-branch-head">' +
+          '<span class="skill-branch-name">' + escapeHtml(br.name) + '</span>' +
+          '<span class="skill-branch-count">' + pris + '/' + noeuds.length + '</span>' +
+        '</header>' +
+        '<p class="skill-branch-desc">' + escapeHtml(br.desc) + '</p>' +
+        noeuds.map(function (n) {
+          const acquis = isSkillUnlocked(n.id);
+          const ouvrable = canUnlockSkill(n.id);
+          // Un nœud dont le prérequis manque est barré, pas juste grisé : la
+          // différence entre « trop cher » et « pas encore accessible » doit
+          // se voir sans lire le texte.
+          const bloque = !acquis && n.requires && !isSkillUnlocked(n.requires);
+          const cout = skillCost(n);
+          return '<button type="button" class="skill-node" data-skill="' + n.id + '"' +
+            ' data-etat="' + (acquis ? 'acquis' : bloque ? 'bloque' : ouvrable ? 'ouvrable' : 'cher') + '"' +
+            (ouvrable ? '' : ' disabled') + '>' +
+            '<span class="skill-node-head">' +
+              '<span class="skill-node-name">' + escapeHtml(n.name) + '</span>' +
+              '<span class="skill-node-cost">' + (acquis ? '✓' : cout + ' pt') + '</span>' +
+            '</span>' +
+            '<span class="skill-node-desc">' + escapeHtml(n.desc) + '</span>' +
+            (bloque ? '<span class="skill-node-req">Demande « ' +
+              escapeHtml(getSkillDef(n.requires).name) + ' »</span>' : '') +
+            '</button>';
+        }).join('') +
+        '</section>';
+    }).join('');
+
+    cont.querySelectorAll('.skill-node:not([disabled])').forEach(function (b) {
+      b.addEventListener('click', function () { unlockSkill(this.getAttribute('data-skill')); });
+    });
   }
 
   /* --- Modale de tirage --- */
@@ -3523,7 +3738,7 @@
         // compris — sinon le chiffre de la carte contredit celui du bandeau.
         const mult = producerMilestoneMult(quantity);
         desc += ' (' + formatNumber(def.production * mult) + '/s chacun' +
-          (mult > 1 ? ', palier ×' + mult : '') + ')';
+          (mult > 1 ? ', palier ×' + producerMilestoneLabel(mult) : '') + ')';
       }
       if (def.type === 'multiplier') desc += ' (+' + ((def.multiplier || 0) * 100) + '% par unité)';
       html += '<span class="name">' + escapeHtml(def.name) + '</span><span class="desc">' + escapeHtml(desc) + '</span><div class="row"><span class="count">Possédés : ' + quantity + '</span><span class="price' + (affordable ? '' : ' too-expensive') + '">' + formatNumber(price) + ' crédits</span></div>';
@@ -3531,12 +3746,12 @@
       // raison d'acheter le 87ᵉ développeur plutôt que de s'arrêter au 86ᵉ.
       if (def.type === 'producer') {
         const reste = producerMilestoneRemaining(quantity);
-        const avance = PRODUCER_MILESTONE_STEP - reste;
+        const avance = producerMilestoneStep() - reste;
         html += '<div class="upgrade-milestone">' +
           '<div class="upgrade-milestone-bar"><span style="width:' +
-            Math.round((avance / PRODUCER_MILESTONE_STEP) * 100) + '%"></span></div>' +
+            Math.round((avance / producerMilestoneStep()) * 100) + '%"></span></div>' +
           '<span class="upgrade-milestone-label">Encore <b>' + reste + '</b> pour le palier ×' +
-            (producerMilestoneMult(quantity) * 2) + '</span>' +
+            producerMilestoneLabel(producerMilestoneMult(quantity) * producerMilestoneBase()) + '</span>' +
           '</div>';
       }
       html += '</button>';
@@ -3944,6 +4159,7 @@
     renderClickValue();
     renderReputation();
     renderChapter();
+    renderSkillBadge();
     renderAgencyScene();
     renderChapterGoal();
     renderIntern();
@@ -3994,8 +4210,11 @@
 
     const prod = getProductionPerSecond();
     if (!(prod > 0)) return null;
-    const creditedMs = Math.min(elapsed, OFFLINE_MAX_MS);
-    const offlineRate = OFFLINE_RATE * (1 + ((state.prestigeBonuses && state.prestigeBonuses.offlinePercent) || 0) / 100);
+    const sk = getSkillEffects();
+    const plafond = OFFLINE_MAX_MS + sk.offlineCapHours * 3600000;
+    const creditedMs = Math.min(elapsed, plafond);
+    const offlineRate = OFFLINE_RATE * (1 +
+      (((state.prestigeBonuses && state.prestigeBonuses.offlinePercent) || 0) + sk.offlinePercent) / 100);
     const gain = Math.floor(prod * (creditedMs / 1000) * offlineRate);
     if (gain <= 0) return null;
 
@@ -4005,7 +4224,7 @@
     if (state.credits > (state.runPeakCredits || 0)) state.runPeakCredits = state.credits;
     // Sauvegarde immédiate : un crash avant le prochain autosave recréditerait le gain
     save();
-    return { gain: gain, elapsedMs: elapsed, capped: elapsed > OFFLINE_MAX_MS };
+    return { gain: gain, elapsedMs: elapsed, capped: elapsed > plafond, capHours: plafond / 3600000 };
   }
 
   function showOfflineModal(report) {
@@ -4016,7 +4235,7 @@
     if (amountEl) amountEl.textContent = '+' + formatNumber(report.gain) + ' crédits';
     if (detailEl) {
       let txt = 'Absence de ' + formatDuration(report.elapsedMs / 1000) + ' — ton agence a tourné à ' + Math.round(OFFLINE_RATE * 100) + ' % de son rendement';
-      if (report.capped) txt += ', plafonné à ' + Math.round(OFFLINE_MAX_MS / 3600000) + ' h';
+      if (report.capped) txt += ', plafonné à ' + Math.round(report.capHours) + ' h';
       detailEl.textContent = txt + '.';
     }
     modal.hidden = false;
@@ -4030,10 +4249,6 @@
   function hideOfflineModal() {
     const modal = document.getElementById('offline-modal');
     if (modal) modal.hidden = true;
-    // Ouverture différée d'un tick : ouvrir la modale de niveau en plein clic de
-    // fermeture ferait retomber le mouseup sur le bonus situé sous le curseur,
-    // qui se retrouverait sélectionné sans que le joueur l'ait choisi.
-    if (state.pendingLevelUp) setTimeout(showLevelUpModal, 0);
   }
 
   function gameLoop(now) {
@@ -4365,6 +4580,11 @@
     });
     document.getElementById('chapter-complete-ok')?.addEventListener('click', completeChapterAndContinue);
     document.getElementById('game-complete-ok')?.addEventListener('click', hideGameCompleteModal);
+    document.getElementById('skill-badge')?.addEventListener('click', openSkillModal);
+    document.getElementById('skill-modal-close')?.addEventListener('click', closeSkillModal);
+    document.getElementById('skill-modal')?.addEventListener('click', function (e) {
+      if (e.target === this) closeSkillModal();
+    });
     document.getElementById('intern-draft-modal-close')?.addEventListener('click', closeInternDraftModal);
     const draftList = document.getElementById('intern-draft-list');
     draftList?.addEventListener('scroll', function () { markDraftListEnd(draftList); }, { passive: true });
@@ -4378,17 +4598,9 @@
     document.getElementById('intern-end-hire')?.addEventListener('click', hireIntern);
     document.getElementById('intern-end-release')?.addEventListener('click', releaseIntern);
     document.getElementById('game-complete-modal-close')?.addEventListener('click', hideGameCompleteModal);
-    document.getElementById('levelup-validate-btn')?.addEventListener('click', function () {
-      if (levelUpSelectedId) {
-        applyLevelBonus(levelUpSelectedId);
-        levelUpSelectedId = null;
-      }
-    });
     document.getElementById('offline-modal-close')?.addEventListener('click', hideOfflineModal);
     document.getElementById('offline-ok')?.addEventListener('click', hideOfflineModal);
-    // Une seule modale à la fois : le level-up en attente s'ouvre à la fermeture du rapport hors-ligne
     if (offlineReport) showOfflineModal(offlineReport);
-    else if (state.pendingLevelUp) showLevelUpModal();
     document.getElementById('chapter-complete-modal-close')?.addEventListener('click', function () {
       document.getElementById('chapter-complete-ok')?.click();
     });

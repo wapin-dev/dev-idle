@@ -47,6 +47,7 @@
         </div>
         <div class="header-row header-row-stats">
           <span class="header-level">Niv. <span id="level">1</span></span>
+          <button type="button" id="skill-badge" class="skill-badge" hidden aria-label="Points de compétence à dépenser"><span id="skill-badge-count">0</span> pt</button>
           <span class="header-chapter" id="chapter-badge">Chapitre 1</span>
           <span class="header-profit">Profit/h <span id="income" class="header-profit-value">0</span></span>
         </div>
@@ -252,14 +253,6 @@
         <p>Partie sauvegardée automatiquement</p>
       </footer>
 
-      <div class="modal-overlay modal-require-choice" id="levelup-modal" hidden>
-        <div class="modal modal-popup modal-no-close">
-          <h3 class="modal-title">Niveau <span id="levelup-level"></span> !</h3>
-          <p class="modal-subtitle">Choisis un bonus, puis valide</p>
-          <div id="levelup-choices" class="levelup-choices"></div>
-          <button type="button" id="levelup-validate-btn" class="levelup-validate-btn" disabled>Valider</button>
-        </div>
-      </div>
       <div class="modal-overlay" id="chapter-complete-modal" hidden>
         <div class="modal modal-popup">
           <button type="button" class="modal-close" id="chapter-complete-modal-close" aria-label="Fermer">&times;</button>
@@ -292,6 +285,14 @@
             <button type="button" class="intern-end-release" id="intern-end-release">Le laisser partir</button>
           </div>
           <p class="intern-end-hint" id="intern-end-hint"></p>
+        </div>
+      </div>
+      <div class="modal-overlay" id="skill-modal" hidden>
+        <div class="modal modal-popup skill-modal">
+          <button type="button" class="modal-close" id="skill-modal-close" aria-label="Fermer">&times;</button>
+          <h3 class="modal-title">Compétences</h3>
+          <p class="modal-subtitle" id="skill-modal-points">0 point à dépenser</p>
+          <div id="skill-branches" class="skill-branches"></div>
         </div>
       </div>
       <div class="modal-overlay" id="game-complete-modal" hidden>
