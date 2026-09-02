@@ -54,7 +54,8 @@ function instrument(version) {
     "    isSkillUnlocked, getSkillEffects, getClickPower, addXP, getXpToNextLevel,\n" +
     "    doPrestige, checkLevelUp, EVENTS, startEvent, endEvent, onEventAction,\n" +
     "    eventActionCost, EVENT_MIN_INTERVAL_MS, EVENT_MAX_INTERVAL_MS,\n" +
-    "    HINTS, showHint, dismissHint, applyChapterReward, getChapterDef };\n})();");
+    "    HINTS, showHint, dismissHint, applyChapterReward, getChapterDef,\n" +
+    "    SONS, playSound, vibrate, ensureAudio };\n})();");
 }
 
 function boot(seed, { migrations = null, version = undefined } = {}) {
@@ -707,6 +708,45 @@ function bootAvecPromo() {
   check('présentations : aucune ne manque', [], manquantes);
   const vides = Object.entries(t.HINTS).filter(([, h]) => !h.titre || !h.texte || h.texte.length < 40);
   check('présentations : toutes disent quelque chose', [], vides.map(([k]) => k));
+}
+
+// 41. Aucun interrupteur de Réglages ne doit être décoratif
+{
+  // Les cases Sons, Notifications et Vibrations existaient dans le markup
+  // depuis le début, et RIEN ne les lisait : trois boutons qui ne faisaient
+  // rien. Même famille de bug que les effets d'arbre non consommés.
+  // Seuls les éléments INTERACTIFS peuvent être décoratifs : un paragraphe
+  // d'aide n'a aucune raison d'être lu par le code.
+  const controles = [...html.matchAll(/<(?:input|button|select)[^>]*\bid="(settings-[\w-]+)"/g)]
+    .map(m => m[1]);
+  check('réglages : des contrôles ont bien été trouvés', true, controles.length >= 3);
+  const morts = controles.filter(id => !src.includes(id));
+  check('réglages : aucun contrôle mort', [], morts);
+}
+
+// 42. Le son se tait quand on le coupe, et ne casse jamais une partie
+{
+  const { t } = boot(undefined);
+  check('son : activé par défaut', true, t.state.soundEnabled);
+  check('son : vibration éteinte par défaut', false, t.state.vibrationEnabled);
+
+  // jsdom n'a pas d'AudioContext : jouer un son doit être sans effet, pas une
+  // exception. La boucle de jeu appelle playSound() à des endroits critiques.
+  let leve = null;
+  try { t.playSound('eureka'); t.playSound('clic'); t.vibrate(10); }
+  catch (e) { leve = String(e); }
+  check('son : sans AudioContext, aucune exception', null, leve);
+
+  t.state.soundEnabled = false;
+  check('son : coupé, ensureAudio ne crée rien', null, t.ensureAudio());
+
+  // Un identifiant inconnu ne doit pas lever non plus.
+  t.state.soundEnabled = true;
+  let leve2 = null;
+  try { t.playSound('nexistepas'); } catch (e) { leve2 = String(e); }
+  check('son : identifiant inconnu ignoré', null, leve2);
+  check('son : tous les sons déclarés sont des fonctions', true,
+    Object.values(t.SONS).every(f => typeof f === 'function'));
 }
 
 const echecs = results.filter(r => !r.ok);

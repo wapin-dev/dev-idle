@@ -663,6 +663,7 @@
     state.skillPoints -= skillCost(def);
     state.skills = state.skills || [];
     state.skills.push(id);
+    playSound('competence');
     invalidateSkillEffects();
     save();
     renderSkillTreeModal();
@@ -956,6 +957,10 @@
     skills: [],
     /** Présentations déjà lues. Elles survivent au Rebranding : on n'oublie pas. */
     seenHints: [],
+    /** Sons activés. Vrai par défaut, comme la case de l'écran Réglages. */
+    soundEnabled: true,
+    /** Vibrations au clic. Faux par défaut : c'est intrusif et ça coûte de la batterie. */
+    vibrationEnabled: false,
     /** Le stagiaire en stage, ou null. Voir le bloc « Les stagiaires ». */
     intern: null,
     /** Les 3 candidats d'une promo en attente de choix, ou null. */
@@ -1560,7 +1565,10 @@
     us.quantity += 1;
     // Un palier franchi est un vrai moment : il double la production de ce
     // producteur. Sans annonce, le joueur voit juste un chiffre bouger.
+    playSound('achat');
     if (def.type === 'producer' && producerMilestoneLevel(us.quantity) > paliersAvant) {
+      playSound('palier');
+      vibrate([18, 40, 18]);
       showToast('Palier ! ' + us.quantity + ' ' + def.name.toLowerCase() +
         's, leur production double — ×' +
         producerMilestoneLabel(producerMilestoneMult(us.quantity)) + ' au total.', 4500);
@@ -1991,6 +1999,7 @@
     const nom = state.intern.name;
     const bonus = state.intern.hireBonusPercent;
     endInternStage();
+    playSound('embauche');
     showToast(nom + ' rejoint l\'agence. +' + bonus + '% de production, définitivement.', 4000);
   }
 
@@ -2103,6 +2112,7 @@
     state.activeEvent = ev;
     state.eventEndsAt = Date.now() + ev.duration;
     state.eventActionUsed = false;
+    playSound(ev.type === 'good' ? 'evenementBon' : 'evenementMauvais');
     showHint('events');
     const banner = document.getElementById('event-banner');
     const textEl = document.getElementById('event-text');
@@ -2311,6 +2321,8 @@
         skillPoints: state.skillPoints,
         skills: state.skills,
         seenHints: state.seenHints,
+        soundEnabled: state.soundEnabled,
+        vibrationEnabled: state.vibrationEnabled,
         prestigeBonusLevels: state.prestigeBonusLevels,
         intern: state.intern,
         internDraft: state.internDraft,
@@ -2491,6 +2503,8 @@
       if (typeof data.skillPoints === 'number') state.skillPoints = data.skillPoints;
       if (Array.isArray(data.skills)) state.skills = data.skills.filter(getSkillDef);
       if (Array.isArray(data.seenHints)) state.seenHints = data.seenHints;
+      if (typeof data.soundEnabled === 'boolean') state.soundEnabled = data.soundEnabled;
+      if (typeof data.vibrationEnabled === 'boolean') state.vibrationEnabled = data.vibrationEnabled;
       invalidateSkillEffects();
       if (data.prestigeBonusLevels) state.prestigeBonusLevels = data.prestigeBonusLevels;
       if (data.intern && typeof data.intern === 'object') state.intern = data.intern;
@@ -2555,6 +2569,7 @@
   function showChapterCompleteModal(ch) {
     const modal = document.getElementById('chapter-complete-modal');
     if (!modal || !ch) return;
+    playSound('chapitre');
     setText('chapter-complete-title', 'Chapitre ' + ch.id + ' terminé');
     setText('chapter-complete-name', ch.name);
     setText('chapter-complete-bonus', ch.rewardLabel ? 'Récompense : ' + ch.rewardLabel : '');
@@ -3520,6 +3535,131 @@
   }
 
   /* ==========================================================================
+     Le son
+
+     Tout est synthétisé en WebAudio : aucun fichier à charger, rien à faire
+     signer, et le poids de l'application ne bouge pas. Un son de jeu idle se
+     réduit de toute façon à quelques enveloppes sur des oscillateurs.
+
+     Le contexte audio ne peut pas être créé avant un geste du joueur — les
+     navigateurs le refusent — d'où la création paresseuse au premier clic.
+     ========================================================================== */
+
+  var audioCtx = null;
+  var audioMaster = null;
+  var lastClickSoundAt = 0;
+
+  /** Créé au premier geste, jamais avant : sinon le navigateur le suspend. */
+  function ensureAudio() {
+    if (!state.soundEnabled) return null;
+    if (audioCtx) {
+      // Android suspend le contexte quand l'application passe en arrière-plan.
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      return audioCtx;
+    }
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return null;
+      audioCtx = new Ctx();
+      audioMaster = audioCtx.createGain();
+      audioMaster.gain.value = 0.22;   // le jeu doit rester discret
+      audioMaster.connect(audioCtx.destination);
+    } catch (e) {
+      audioCtx = null;
+    }
+    return audioCtx;
+  }
+
+  /**
+   * Une note : fréquence, durée, forme d'onde, et une enveloppe qui évite le
+   * clic parasite qu'on entend quand un oscillateur démarre ou s'arrête net.
+   */
+  function tone(opts) {
+    const ctx = ensureAudio();
+    if (!ctx || !audioMaster) return;
+    const t0 = ctx.currentTime + (opts.delay || 0);
+    const dur = opts.dur || 0.12;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = opts.type || 'triangle';
+    osc.frequency.setValueAtTime(opts.freq, t0);
+    if (opts.to) osc.frequency.exponentialRampToValueAtTime(opts.to, t0 + dur);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(opts.gain || 0.3, t0 + Math.min(0.02, dur * 0.3));
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(g); g.connect(audioMaster);
+    osc.start(t0); osc.stop(t0 + dur + 0.02);
+  }
+
+  /** Une petite mélodie : une suite de notes décalées dans le temps. */
+  function melodie(notes, base) {
+    notes.forEach(function (n, i) {
+      tone(Object.assign({ delay: i * (base || 0.075) }, n));
+    });
+  }
+
+  const SONS = {
+    // Le plus joué de tous : court, doux, et sa hauteur varie pour que la
+    // répétition ne devienne pas une perceuse.
+    clic: function () {
+      tone({ freq: 620 + Math.random() * 90, dur: 0.05, gain: 0.16, type: 'triangle' });
+    },
+    achat: function () {
+      melodie([{ freq: 440, dur: 0.07, gain: 0.22 }, { freq: 660, dur: 0.1, gain: 0.2 }], 0.06);
+    },
+    palier: function () {
+      melodie([{ freq: 523, dur: 0.09 }, { freq: 659, dur: 0.09 }, { freq: 784, dur: 0.16 }], 0.07);
+    },
+    eureka: function () {
+      // Le moment fort du jeu : un balayage montant, puis un accord tenu.
+      tone({ freq: 300, to: 1200, dur: 0.35, gain: 0.28, type: 'sawtooth' });
+      melodie([{ freq: 784, dur: 0.5, gain: 0.2 }, { freq: 988, dur: 0.5, gain: 0.18 },
+               { freq: 1319, dur: 0.55, gain: 0.15 }], 0.06);
+    },
+    embauche: function () {
+      melodie([{ freq: 523, dur: 0.12 }, { freq: 784, dur: 0.12 }, { freq: 1047, dur: 0.22 }], 0.09);
+    },
+    chapitre: function () {
+      melodie([{ freq: 523, dur: 0.14 }, { freq: 659, dur: 0.14 },
+               { freq: 784, dur: 0.14 }, { freq: 1047, dur: 0.34 }], 0.11);
+    },
+    competence: function () {
+      tone({ freq: 880, to: 1320, dur: 0.18, gain: 0.2, type: 'sine' });
+    },
+    evenementBon: function () {
+      melodie([{ freq: 659, dur: 0.1 }, { freq: 880, dur: 0.18 }], 0.08);
+    },
+    evenementMauvais: function () {
+      // Descendant et sourd : on doit l'entendre comme une contrariété.
+      tone({ freq: 320, to: 150, dur: 0.32, gain: 0.22, type: 'sawtooth' });
+    },
+  };
+
+  function playSound(id) {
+    if (!state.soundEnabled) return;
+    const f = SONS[id];
+    if (!f) return;
+    // Le clic peut partir dix fois par seconde : au-delà, on en saute.
+    if (id === 'clic') {
+      const now = Date.now();
+      if (now - lastClickSoundAt < 45) return;
+      lastClickSoundAt = now;
+    }
+    try { f(); } catch (e) { /* un son raté ne doit jamais casser une partie */ }
+  }
+
+  /**
+   * Vibration courte. `navigator.vibrate` n'existe pas partout (iOS l'ignore),
+   * et l'appeler sans geste préalable lève sur certains navigateurs.
+   */
+  function vibrate(ms) {
+    if (!state.vibrationEnabled) return;
+    try {
+      if (navigator.vibrate) navigator.vibrate(ms);
+    } catch (e) { /* sans effet, jamais bloquant */ }
+  }
+
+  /* ==========================================================================
      Les présentations
 
      Le jeu n'expliquait rien. Le joueur a demandé où était l'arbre de
@@ -3813,6 +3953,8 @@
       setTimeout(function () { el.remove(); }, 2200);
     }
     document.body.classList.add('eureka-active');
+    playSound('eureka');
+    vibrate([20, 50, 30]);
     showHint('eureka');
     showToast((state.intern ? state.intern.name : 'Ton stagiaire') + ' a trouvé quelque chose. Production x' +
       (state.intern ? state.intern.eurekaMultiplier : 1) + ' !', 4000);
@@ -4654,6 +4796,8 @@
 
   function onCodeClick(e) {
     addCredits();
+    playSound('clic');
+    vibrate(12);
     pulseAgencyDesk();
     bumpCredits();
     if (e && typeof e.clientX === 'number' && typeof e.clientY === 'number') {
@@ -4827,6 +4971,28 @@
     // moment, ne serait-ce que pour savoir vers quoi on épargne.
     document.getElementById('header-level')?.addEventListener('click', openSkillModal);
     document.getElementById('skill-card')?.addEventListener('click', openSkillModal);
+
+    // Les interrupteurs de Réglages étaient purement décoratifs : le markup
+    // existait depuis le début, rien ne les lisait.
+    const boiteSon = document.getElementById('settings-sound');
+    if (boiteSon) {
+      boiteSon.checked = !!state.soundEnabled;
+      boiteSon.addEventListener('change', function () {
+        state.soundEnabled = this.checked;
+        save();
+        // Un retour immédiat : on doit entendre ce qu'on vient d'activer.
+        if (state.soundEnabled) playSound('competence');
+      });
+    }
+    const boiteVib = document.getElementById('settings-vibration');
+    if (boiteVib) {
+      boiteVib.checked = !!state.vibrationEnabled;
+      boiteVib.addEventListener('change', function () {
+        state.vibrationEnabled = this.checked;
+        save();
+        if (state.vibrationEnabled) vibrate(25);
+      });
+    }
     document.getElementById('skill-modal-close')?.addEventListener('click', closeSkillModal);
     document.getElementById('skill-modal')?.addEventListener('click', function (e) {
       if (e.target === this) closeSkillModal();
