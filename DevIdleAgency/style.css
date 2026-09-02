@@ -1766,6 +1766,18 @@ body.tapstorm-theme #game-screen .intern-end-hire {
   color: #fff;
   border: none;
 }
+/* Le dégradé violet ci-dessus bat en spécificité tout ce que game.css écrit sur
+   ce bouton : l'état indisponible doit donc être posé ici, sous le même
+   sélecteur. Sans lui, « Embaucher » restait le bloc le plus voyant de la
+   modale et se lisait comme l'action principale alors qu'il est hors de
+   portée — le joueur tape dessus sans que rien ne se passe. */
+body.tapstorm-theme #game-screen .intern-end-hire:disabled,
+body.tapstorm-theme #game-screen .intern-end-hire.too-expensive {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: rgba(241, 241, 244, 0.45);
+  cursor: not-allowed;
+}
 body.tapstorm-theme #game-screen .intern-card[data-mode="promo"],
 body.tapstorm-theme #game-screen .intern-card[data-mode="decision"] {
   border-color: #a78bfa;

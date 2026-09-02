@@ -2928,6 +2928,19 @@
       list.appendChild(card);
     });
     modal.hidden = false;
+    // Après l'affichage seulement : tant que la modale est masquée, la liste
+    // n'a pas de hauteur et se croirait déjà défilée jusqu'en bas.
+    markDraftListEnd(list);
+  }
+
+  /**
+   * Dit au CSS si la liste des candidats est arrivée en bas. Le dégradé qui
+   * signale « il y a une suite » doit disparaître à ce moment-là, sinon il
+   * efface le bouton du dernier candidat.
+   */
+  function markDraftListEnd(list) {
+    const atEnd = list.scrollTop + list.clientHeight >= list.scrollHeight - 4;
+    list.setAttribute('data-at-end', atEnd ? 'true' : 'false');
   }
 
   function closeInternDraftModal() {
@@ -3894,6 +3907,8 @@
     document.getElementById('chapter-complete-ok')?.addEventListener('click', completeChapterAndContinue);
     document.getElementById('game-complete-ok')?.addEventListener('click', hideGameCompleteModal);
     document.getElementById('intern-draft-modal-close')?.addEventListener('click', closeInternDraftModal);
+    const draftList = document.getElementById('intern-draft-list');
+    draftList?.addEventListener('scroll', function () { markDraftListEnd(draftList); }, { passive: true });
     document.getElementById('intern-draft-modal')?.addEventListener('click', function (e) {
       if (e.target === this) closeInternDraftModal();
     });

@@ -1707,18 +1707,31 @@ body.tapstorm-theme #game-screen .tapstorm-nav .tab-btn[hidden] {
 }
 
 /* Le calque flotte au-dessus du jeu sans intercepter les clics : pendant un
-   Eurêka le joueur doit pouvoir continuer à cliquer. */
+   Eurêka le joueur doit pouvoir continuer à cliquer.
+
+   La rafale est ancrée dans le tiers haut, pas au centre : centrée, elle
+   tombait pile sur la carte du stagiaire et rendait deux de ses lignes
+   illisibles pendant deux secondes — c'est-à-dire exactement l'endroit que le
+   joueur regarde quand un Eurêka se déclenche. */
 .eureka-layer {
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 200;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
+  padding-top: 15vh;
 }
 
+/* Elle porte son propre fond : quel que soit ce qu'elle survole, elle reste
+   lisible et ne mange pas le texte du dessous. */
 .eureka-burst {
+  padding: 10px 22px;
+  border-radius: 999px;
+  background: rgba(12, 10, 24, 0.88);
+  border: 1px solid rgba(251, 191, 36, 0.55);
+  box-shadow: 0 0 40px rgba(251, 191, 36, 0.3);
   font-size: 2rem;
   font-weight: 900;
   letter-spacing: 0.08em;
@@ -1736,12 +1749,24 @@ body.tapstorm-theme #game-screen .tapstorm-nav .tab-btn[hidden] {
 }
 
 /* ===== Modale de tirage ===== */
+/* Les trois candidats ne tiennent pas dans un écran de téléphone (~714 px de
+   cartes pour ~586 px utiles). Le troisième est donc coupé — et un bord net se
+   lit comme la fin de la modale, alors que le choix porte justement sur trois
+   profils. Le dégradé du bas dit qu'il y a une suite ; il s'efface une fois la
+   liste défilée jusqu'en bas, sinon il masquerait le dernier bouton. */
 .intern-draft-list {
   display: flex;
   flex-direction: column;
   gap: 12px;
   max-height: 64vh;
   overflow-y: auto;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 56px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 56px), transparent);
+}
+
+.intern-draft-list[data-at-end="true"] {
+  -webkit-mask-image: none;
+  mask-image: none;
 }
 
 .intern-candidate {
@@ -1820,9 +1845,14 @@ body.tapstorm-theme #game-screen .tapstorm-nav .tab-btn[hidden] {
   background: var(--accent-dim);
 }
 
+/* Une simple opacité ne suffisait pas : le violet du bouton sur le violet de la
+   modale restait le bloc le plus voyant de l'écran, et se lisait encore comme
+   l'action principale alors qu'il est hors de portée. */
 .intern-end-hire:disabled,
 .intern-end-hire.too-expensive {
-  opacity: 0.55;
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: rgba(241, 241, 244, 0.45);
   cursor: not-allowed;
 }
 
