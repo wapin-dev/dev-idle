@@ -71,20 +71,8 @@
               <span class="chapter-goal-reward" id="chapter-goal-reward"></span>
             </div>
           </section>
+          <section class="intern-card" id="intern-card" data-mode="attente" aria-live="polite" hidden></section>
           <section class="clicker-section">
-            <div class="accueil-code-anim" aria-hidden="true">
-              <div class="accueil-code-window">
-                <div class="accueil-code-title">agence.js</div>
-                <div class="accueil-code-body">
-                  <div class="accueil-code-row">
-                    <span class="accueil-comment">// On code. Tu délégues. Tu scales.</span>
-                  </div>
-                  <div class="accueil-code-row">
-                    <span class="accueil-keyword">const</span> <span class="accueil-var">livraison</span> <span class="accueil-operator">=</span> <span class="accueil-var">agence</span><span class="accueil-dot">.</span><span class="accueil-method">deploy</span><span class="accueil-bracket">()</span><span class="accueil-cursor"></span>
-                  </div>
-                </div>
-              </div>
-            </div>
             <button type="button" id="btn-code" class="btn-code tapstorm-cta" aria-label="Coder une feature">
               <span class="btn-code-text">Coder une feature</span>
               <span id="click-value" class="click-value">+1</span>
@@ -257,6 +245,8 @@
         <button type="button" class="tab-btn" data-tab="reglages"><img class="nav-icon game-icon" data-icon="settings" src="/assets/icons/placeholder.svg" alt="" width="24" height="24" data-fallback="/assets/icons/placeholder.svg"><span class="nav-label">Réglages</span></button>
       </nav>
 
+      <div class="eureka-layer" id="eureka-layer" aria-hidden="true"></div>
+
       <footer class="footer tapstorm-footer">
         <p>Partie sauvegardée automatiquement</p>
       </footer>
@@ -279,6 +269,28 @@
           <p class="chapter-complete-next-label">Prochain but</p>
           <p class="chapter-complete-next" id="chapter-complete-next" hidden></p>
           <button type="button" class="levelup-choice" id="chapter-complete-ok">Continuer</button>
+        </div>
+      </div>
+      <div class="modal-overlay" id="intern-draft-modal" hidden>
+        <div class="modal modal-popup intern-draft-modal">
+          <button type="button" class="modal-close" id="intern-draft-modal-close" aria-label="Fermer">&times;</button>
+          <h3 class="modal-title">Promo de stagiaires</h3>
+          <p class="modal-subtitle">Trois candidats. Tu ne peux en garder qu'un — les autres partent chez la concurrence.</p>
+          <div id="intern-draft-list" class="intern-draft-list"></div>
+        </div>
+      </div>
+      <div class="modal-overlay" id="intern-end-modal" hidden>
+        <div class="modal modal-popup intern-end-modal">
+          <button type="button" class="modal-close" id="intern-end-modal-close" aria-label="Fermer">&times;</button>
+          <p class="intern-end-kicker">Fin de stage</p>
+          <h3 class="modal-title" id="intern-end-name">—</h3>
+          <p class="intern-end-rarity" id="intern-end-rarity"></p>
+          <p class="intern-end-report" id="intern-end-report"></p>
+          <div class="intern-end-choices">
+            <button type="button" class="intern-end-hire" id="intern-end-hire"></button>
+            <button type="button" class="intern-end-release" id="intern-end-release">Le laisser partir</button>
+          </div>
+          <p class="intern-end-hint" id="intern-end-hint"></p>
         </div>
       </div>
       <div class="modal-overlay" id="game-complete-modal" hidden>

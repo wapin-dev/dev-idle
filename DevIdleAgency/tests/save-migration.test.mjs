@@ -44,7 +44,9 @@ function instrument(version) {
     "  window.__t = { readAndMigrateSave, load, save, state, SAVE_MIGRATIONS,\n" +
     "    getVersion: () => SAVE_VERSION, isBlocked: () => saveBlocked,\n" +
     "    isFeatureUnlocked, catchUpChapters, getChapterProgress, CHAPTERS,\n" +
-    "    getProductionPerSecond };\n})();");
+    "    openInternDraft, chooseInternCandidate, hireIntern, releaseIntern,\n" +
+    "    getProductionPerSecond, getInternProdPercent, isEurekaActive, isInternStageOver,\n" +
+    "    tickInterns, INTERN_RARITIES, INTERN_TRAITS, INTERN_DRAFT_SIZE };\n})();");
 }
 
 function boot(seed, { migrations = null, version = undefined } = {}) {
@@ -124,7 +126,7 @@ const check = (nom, attendu, obtenu) => {
   check('version future -> pas de copie de secours', null, window.localStorage.getItem(BACKUP));
 }
 
-// 7. Boucle de migration réelle : deux étapes enchaînées
+// 7. Boucle de migration réelle : v1 -> v3, deux étapes enchaînées
 {
   const seed = JSON.stringify({ credits: 10, playerLevel: 3, save_version: 1 });
   const { window, t } = boot(seed, {
@@ -156,6 +158,8 @@ const check = (nom, attendu, obtenu) => {
     },
   });
   const r = t.readAndMigrateSave();
+  check('v2 -> v3 : étape v1 non rejouée', 10, r.data.credits);
+  check('v2 -> v3 : étape v2 appliquée', 8, r.data.playerLevel);
 }
 
 // 9. Étape manquante dans la table (l'étape 1 existe, la 2 non)
@@ -187,7 +191,7 @@ const check = (nom, attendu, obtenu) => {
   check('illisible != vide', true, t.load() !== 'vide');
 }
 
-// 13. Migration 1 -> version courante : refonte de la progression
+// 13. Migration 1 -> version courante : refonte de la progression, puis stagiaires
 {
   // Une partie avancée d'avant la refonte : chapitre 3 atteint par l'ancien
   // seuil de crédits, un prestige déjà fait, un bonus Réputation acheté.
@@ -211,6 +215,8 @@ const check = (nom, attendu, obtenu) => {
   check('v1 -> v2 : crédits cumulés estimés sur le meilleur run', 800000, r.data.totalCreditsEarned);
   check('v1 -> v2 : pic de la partie en cours', 250000, r.data.runPeakCredits);
   check('v1 -> v2 : un prestige déduit de la réputation', 1, r.data.prestigeCount);
+  check('v2 -> v3 : partie déjà avancée créditée d\'une embauche', 1, r.data.internsHired);
+  check('v2 -> v3 : aucun stagiaire en stage', null, r.data.intern);
   check('v1 -> v2 : bonus uniques convertis en niveaux', { prod10: 1, click5: 1 },
     r.data.prestigeBonusLevels);
 
@@ -240,6 +246,7 @@ const check = (nom, attendu, obtenu) => {
   t.state.totalCreditsEarned = 1e9;
   t.state.runPeakCredits = 1e9;
   t.state.prestigeCount = 5;
+  t.state.internsHired = 1;
   t.state.upgrades.find(u => u.id === 'stagiaire').quantity = 20;
   t.state.upgrades.find(u => u.id === 'devSenior').quantity = 50;
   t.catchUpChapters();
@@ -247,8 +254,150 @@ const check = (nom, attendu, obtenu) => {
     t.state.completedChapters.length);
   check('escalier : partie marquée terminée', true, t.state.gameCompleted);
   check('escalier : toutes les fonctionnalités ouvertes', true,
-    ['boutique', 'events', 'promotions', 'bureaux', 'branding', 'prestige', 'reputation', 'campus']
+    ['boutique', 'stagiaires', 'events', 'promotions', 'bureaux', 'branding', 'prestige', 'reputation', 'campus']
       .every(f => t.isFeatureUnlocked(f)));
+}
+
+// 16. Les promos sont fermées tant que le chapitre 2 n'est pas terminé
+{
+  const { t } = boot(undefined);
+  check('stagiaires : fermés au chapitre 1', false, t.isFeatureUnlocked('stagiaires'));
+  t.openInternDraft();
+  check('stagiaires : aucune promo tant que c\'est fermé', null, t.state.internDraft);
+  t.tickInterns();
+  check('stagiaires : la boucle ne force rien non plus', null, t.state.internDraft);
+}
+
+/** Ouvre le système et pose une promo. */
+function bootAvecPromo() {
+  const { t, window } = boot(undefined);
+  t.state.unlockedFeatures = ['boutique', 'stagiaires'];
+  t.openInternDraft();
+  return { t, window };
+}
+
+// 17. Un tirage propose 3 candidats complets
+{
+  const { t } = bootAvecPromo();
+  const c = t.state.internDraft.candidates;
+  check('tirage : 3 candidats', t.INTERN_DRAFT_SIZE, c.length);
+  check('tirage : chaque candidat a une rareté connue', true,
+    c.every(x => !!t.INTERN_RARITIES[x.rarity]));
+  check('tirage : chaque candidat a un trait connu', true,
+    c.every(x => t.INTERN_TRAITS.some(tr => tr.id === x.traitId)));
+  check('tirage : stats figées sur le candidat', true,
+    c.every(x => x.prodPercent > 0 && x.hireBonusPercent > 0 && x.stageMs > 0));
+  check('tirage : identifiants distincts', 3, new Set(c.map(x => x.id)).size);
+}
+
+// 18. Choisir un candidat fait partir les deux autres
+{
+  const { t } = bootAvecPromo();
+  const choisi = t.state.internDraft.candidates[1];
+  t.chooseInternCandidate(choisi.id);
+  check('choix : le stagiaire est en stage', choisi.id, t.state.intern.id);
+  check('choix : la promo est close', null, t.state.internDraft);
+  check('choix : coût d\'embauche figé', true, t.state.intern.hireCost >= 250);
+  check('choix : stage en cours', false, t.isInternStageOver());
+}
+
+// 19. Le stagiaire en stage produit, et son bonus s'arrête à la fin du stage
+{
+  const { t } = bootAvecPromo();
+  t.state.upgrades.find(u => u.id === 'stagiaire').quantity = 100;
+  const avant = t.getProductionPerSecond();
+  const choisi = t.state.internDraft.candidates[0];
+  t.chooseInternCandidate(choisi.id);
+  const pendant = t.getProductionPerSecond();
+  check('stage : la production augmente', true, pendant > avant);
+  check('stage : du bon pourcentage', choisi.prodPercent,
+    Math.round((pendant / avant - 1) * 1000) / 10);
+  // Fin du stage : le bonus s'arrête, mais le stagiaire reste à décider.
+  t.state.intern.endsAt = Date.now() - 1;
+  check('fin de stage : bonus retiré', 0, t.getInternProdPercent());
+  check('fin de stage : production revenue au niveau d\'avant', true,
+    Math.abs(t.getProductionPerSecond() - avant) < 1e-9);
+  check('fin de stage : le stagiaire attend une décision', true, !!t.state.intern);
+}
+
+// 20. L'Eurêka multiplie toute la production de l'agence
+{
+  const { t } = bootAvecPromo();
+  t.state.upgrades.find(u => u.id === 'stagiaire').quantity = 100;
+  const choisi = t.state.internDraft.candidates[0];
+  t.chooseInternCandidate(choisi.id);
+  const normal = t.getProductionPerSecond();
+  t.state.intern.eurekaMultiplier = 6;
+  t.state.eurekaUntil = Date.now() + 20000;
+  check('eurêka : actif', true, t.isEurekaActive());
+  check('eurêka : production x6', 6, Math.round(t.getProductionPerSecond() / normal));
+  t.state.eurekaUntil = Date.now() - 1;
+  check('eurêka : terminé, production revenue', normal, t.getProductionPerSecond());
+}
+
+// 21. Embaucher coûte, et laisse un bonus définitif
+{
+  const { t } = bootAvecPromo();
+  const choisi = t.state.internDraft.candidates[0];
+  t.chooseInternCandidate(choisi.id);
+  t.state.intern.endsAt = Date.now() - 1;
+  const cout = t.state.intern.hireCost;
+  const bonus = t.state.intern.hireBonusPercent;
+
+  t.state.credits = cout - 1;
+  t.hireIntern();
+  check('embauche : refusée sans les crédits', 0, t.state.internsHired);
+
+  t.state.credits = cout + 500;
+  t.hireIntern();
+  check('embauche : crédits débités', 500, Math.floor(t.state.credits));
+  check('embauche : comptée', 1, t.state.internsHired);
+  check('embauche : bonus définitif acquis', bonus, t.state.internHireBonusPercent);
+  check('embauche : ajouté à l\'équipe', choisi.name, t.state.hiredInterns[0].name);
+  check('embauche : le stage est clos', null, t.state.intern);
+  check('embauche : prochaine promo programmée', true, t.state.nextInternDraftAt > Date.now());
+}
+
+// 22. Laisser partir ne rapporte rien et ne coûte rien
+{
+  const { t } = bootAvecPromo();
+  t.chooseInternCandidate(t.state.internDraft.candidates[0].id);
+  t.state.intern.endsAt = Date.now() - 1;
+  t.state.credits = 9999;
+  t.releaseIntern();
+  check('départ : rien débité', 9999, Math.floor(t.state.credits));
+  check('départ : aucune embauche', 0, t.state.internsHired);
+  check('départ : aucun bonus', 0, t.state.internHireBonusPercent);
+  check('départ : le stage est clos', null, t.state.intern);
+}
+
+// 23. Une décision non prise attend le retour du joueur
+{
+  const { t } = bootAvecPromo();
+  t.chooseInternCandidate(t.state.internDraft.candidates[0].id);
+  t.state.intern.endsAt = Date.now() - 60 * 60 * 1000;  // stage fini il y a une heure
+  t.tickInterns();
+  check('absence : le stagiaire attend toujours', true, !!t.state.intern);
+  check('absence : aucune promo ne le remplace', null, t.state.internDraft);
+}
+
+// 24. L'état des stagiaires fait l'aller-retour par la sauvegarde
+{
+  const { t, window } = bootAvecPromo();
+  const choisi = t.state.internDraft.candidates[0];
+  t.chooseInternCandidate(choisi.id);
+  t.state.internsHired = 2;
+  t.state.internHireBonusPercent = 13;
+  t.state.eurekaUntil = Date.now() + 30000;
+  t.save();
+  const brut = JSON.parse(window.localStorage.getItem(KEY));
+  check('sauvegarde : le stagiaire est écrit', choisi.id, brut.intern.id);
+  check('sauvegarde : bonus définitif écrit', 13, brut.internHireBonusPercent);
+  t.state.intern = null; t.state.internsHired = 0; t.state.internHireBonusPercent = 0;
+  t.load();
+  check('rechargement : stagiaire restauré', choisi.id, t.state.intern.id);
+  check('rechargement : embauches restaurées', 2, t.state.internsHired);
+  check('rechargement : Eurêka non repris', false, t.isEurekaActive());
 }
 
 const echecs = results.filter(r => !r.ok);

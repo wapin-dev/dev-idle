@@ -178,127 +178,6 @@ html {
 }
 
 
-/* Animation accueil – bloc "agence" style IDE, impactant */
-.accueil-code-anim {
-  margin-bottom: 18px;
-  font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, monospace;
-  animation: accueil-block-enter 0.6s ease-out;
-}
-
-.accueil-code-window {
-  border-radius: 12px;
-  overflow: hidden;
-  background: linear-gradient(180deg, rgba(30, 27, 45, 0.98) 0%, rgba(15, 12, 28, 0.98) 100%);
-  border: 1px solid rgba(139, 92, 246, 0.5);
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3), 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 40px rgba(139, 92, 246, 0.2);
-  animation: accueil-window-glow 2.5s ease-in-out infinite;
-}
-
-.accueil-code-title {
-  padding: 8px 14px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.7);
-  background: rgba(0, 0, 0, 0.35);
-  border-bottom: 1px solid rgba(139, 92, 246, 0.3);
-  letter-spacing: 0.05em;
-}
-
-.accueil-code-body {
-  padding: 14px 16px 16px;
-}
-
-.accueil-code-row {
-  font-size: 1rem;
-  line-height: 1.6;
-  letter-spacing: 0.02em;
-}
-
-.accueil-code-row + .accueil-code-row {
-  margin-top: 6px;
-}
-
-.accueil-comment {
-  color: #6ee7b7;
-  font-style: italic;
-  text-shadow: 0 0 12px rgba(110, 231, 183, 0.4);
-  animation: accueil-comment-pulse 3s ease-in-out infinite;
-}
-
-.accueil-keyword {
-  color: #c084fc;
-  font-weight: 700;
-  text-shadow: 0 0 10px rgba(192, 132, 252, 0.5);
-}
-
-.accueil-var {
-  color: #fbbf24;
-  font-weight: 600;
-}
-
-.accueil-operator {
-  color: rgba(255, 255, 255, 0.9);
-}
-
-.accueil-dot {
-  color: #a78bfa;
-}
-
-.accueil-method {
-  color: #67e8f9;
-  font-weight: 600;
-  text-shadow: 0 0 8px rgba(103, 232, 249, 0.4);
-}
-
-.accueil-code-row .accueil-bracket {
-  color: #f472b6;
-  font-weight: 700;
-}
-
-.accueil-code-row .accueil-cursor {
-  display: inline-block;
-  width: 8px;
-  height: 1.15em;
-  margin-left: 2px;
-  background: #a78bfa;
-  vertical-align: text-bottom;
-  border-radius: 2px;
-  box-shadow: 0 0 14px rgba(167, 139, 250, 0.9);
-  animation: accueil-cursor-blink 0.8s step-end infinite;
-}
-
-@keyframes accueil-block-enter {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes accueil-window-glow {
-  0%, 100% {
-    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3), 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 40px rgba(139, 92, 246, 0.2);
-    border-color: rgba(139, 92, 246, 0.5);
-  }
-  50% {
-    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3), 0 8px 36px rgba(0, 0, 0, 0.45), 0 0 50px rgba(139, 92, 246, 0.35);
-    border-color: rgba(139, 92, 246, 0.7);
-  }
-}
-
-@keyframes accueil-comment-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.85; }
-}
-
-@keyframes accueil-cursor-blink {
-  0%, 50% { opacity: 1; }
-  51%, 100% { opacity: 0; }
-}
-
 /* Popup "+X" au clic profit */
 .click-profit-popup {
   position: fixed;
@@ -1664,4 +1543,306 @@ body.tapstorm-theme #game-screen .tapstorm-nav .tab-btn[hidden] {
 .reputation-shop[hidden],
 .prestige-section[hidden] {
   display: none !important;
+}
+
+/* ===== Les stagiaires =====================================================
+   La carte occupe la place de l'ancienne fenêtre de code décorative, en tête
+   de l'accueil : c'est la mécanique mise en avant, elle doit être la première
+   chose qui bouge à l'écran. */
+.intern-card {
+  display: block;
+  margin: 0 0 14px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  animation: intern-card-enter 0.45s ease-out;
+}
+
+.intern-card[hidden] { display: none !important; }
+
+@keyframes intern-card-enter {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+
+.intern-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.intern-kicker {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.intern-name {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.intern-rarity {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+}
+
+.intern-rarity[data-rarity="commun"] { color: #9aa4b8; }
+.intern-rarity[data-rarity="prometteur"] { color: #60a5fa; }
+.intern-rarity[data-rarity="pepite"] { color: #fbbf24; }
+
+.intern-line,
+.intern-foot,
+.intern-roster,
+.intern-blurb {
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.intern-blurb {
+  font-style: italic;
+  color: var(--text-muted);
+}
+
+.intern-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+}
+
+.intern-stat {
+  font-size: 0.82rem;
+  color: var(--text);
+}
+
+.intern-stat-eureka { color: #fbbf24; }
+
+.intern-trait {
+  margin-top: 4px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.intern-bar {
+  display: block;
+  margin-top: 10px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.intern-bar-fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  transition: width 0.4s linear;
+}
+
+.intern-cta {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #fff;
+  background: var(--accent-dim);
+  cursor: pointer;
+}
+
+/* Une promo qui attend doit se voir depuis l'autre bout de l'écran. */
+.intern-card[data-mode="promo"],
+.intern-card[data-mode="decision"] {
+  border-color: var(--accent);
+  animation: intern-card-enter 0.45s ease-out, intern-waiting 2s ease-in-out 0.45s infinite;
+}
+
+@keyframes intern-waiting {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(0, 217, 165, 0); }
+  50% { box-shadow: 0 0 0 4px rgba(0, 217, 165, 0.15); }
+}
+
+/* ===== Eurêka ===== */
+.intern-eureka-banner {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: #1a1200;
+  background: linear-gradient(90deg, #fbbf24, #f59e0b);
+  animation: eureka-pulse 1s ease-in-out infinite;
+}
+
+.intern-eureka-banner[hidden] { display: none !important; }
+
+@keyframes eureka-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+}
+
+.intern-card[data-eureka="true"] {
+  border-color: #fbbf24;
+  box-shadow: 0 0 24px rgba(251, 191, 36, 0.35);
+}
+
+/* Le calque flotte au-dessus du jeu sans intercepter les clics : pendant un
+   Eurêka le joueur doit pouvoir continuer à cliquer. */
+.eureka-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.eureka-burst {
+  font-size: 2rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  color: #fbbf24;
+  text-shadow: 0 0 30px rgba(251, 191, 36, 0.8);
+  animation: eureka-burst 2.2s ease-out forwards;
+}
+
+@keyframes eureka-burst {
+  0% { opacity: 0; transform: scale(0.6); }
+  15% { opacity: 1; transform: scale(1.15); }
+  30% { transform: scale(1); }
+  75% { opacity: 1; }
+  100% { opacity: 0; transform: scale(1.05) translateY(-30px); }
+}
+
+/* ===== Modale de tirage ===== */
+.intern-draft-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 64vh;
+  overflow-y: auto;
+}
+
+.intern-candidate {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 14px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text);
+  cursor: pointer;
+  animation: intern-candidate-enter 0.4s ease-out backwards;
+}
+
+@keyframes intern-candidate-enter {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+
+.intern-candidate[data-rarity="prometteur"] { border-color: rgba(96, 165, 250, 0.5); }
+.intern-candidate[data-rarity="pepite"] {
+  border-color: rgba(251, 191, 36, 0.6);
+  box-shadow: 0 0 20px rgba(251, 191, 36, 0.15);
+}
+
+.intern-pick {
+  display: block;
+  margin-top: 12px;
+  padding: 9px;
+  border-radius: var(--radius-sm);
+  text-align: center;
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: #fff;
+  background: var(--accent-dim);
+}
+
+/* ===== Modale de fin de stage ===== */
+.intern-end-kicker {
+  margin: 0 0 4px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.intern-end-rarity { margin: 4px 0 10px; }
+
+.intern-end-report {
+  margin: 0 0 16px;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.intern-end-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.intern-end-hire,
+.intern-end-release {
+  width: 100%;
+  padding: 13px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  font-size: 0.92rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.intern-end-hire {
+  color: #fff;
+  background: var(--accent-dim);
+}
+
+.intern-end-hire:disabled,
+.intern-end-hire.too-expensive {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.intern-end-gain {
+  display: block;
+  margin-top: 3px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+.intern-end-release {
+  color: var(--text-muted);
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.intern-end-hint {
+  margin: 14px 0 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--text-muted);
 }

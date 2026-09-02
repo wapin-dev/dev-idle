@@ -8,7 +8,7 @@
    * progression de quelqu'un sans en garder une trace récupérable.
    */
   const SAVE_BACKUP_KEY = SAVE_KEY + '-backup';
-  const SAVE_VERSION = 2;
+  const SAVE_VERSION = 3;
 
   /**
    * Migrations de sauvegarde.
@@ -67,6 +67,37 @@
         (Array.isArray(data.purchasedPrestigeBonuses) ? data.purchasedPrestigeBonuses : []).forEach(function (id) {
           data.prestigeBonusLevels[id] = 1;
         });
+      }
+      return data;
+    },
+    /**
+     * 2 → 3 : arrivée des stagiaires. L'échelle passe de 9 à 10 chapitres — un
+     * nouveau chapitre 4 (« La première embauche ») s'intercale — donc les
+     * anciens numéros ne désignent plus les mêmes buts. Même méthode qu'en
+     * 1 → 2 : on remet le compteur à zéro et `catchUpChapters()` recalcule.
+     */
+    2: function (data) {
+      data.chapter = 1;
+      data.completedChapters = [];
+      data.chapterBonuses = {};
+      data.unlockedFeatures = [];
+      data.gameCompleted = false;
+      data.intern = null;
+      data.internDraft = null;
+      data.nextInternDraftAt = 0;
+      data.nextEurekaRollAt = 0;
+      data.eurekaUntil = 0;
+      if (typeof data.internHireBonusPercent !== 'number') data.internHireBonusPercent = 0;
+      if (!Array.isArray(data.hiredInterns)) data.hiredInterns = [];
+      // Le but du nouveau chapitre 4 est d'embaucher un stagiaire — impossible
+      // pour une partie qui n'a jamais vu le système. Sans ce crédit, une partie
+      // déjà avancée serait renvoyée au chapitre 4 et perdrait les récompenses
+      // des chapitres suivants jusqu'à ce qu'elle refasse un stage complet.
+      // On se base sur la richesse atteinte, seul repère qui survive aux deux
+      // renumérotations de chapitres.
+      if (typeof data.internsHired !== 'number') {
+        var dejaAvance = Math.max(data.bestRunCredits || 0, data.runPeakCredits || 0, data.credits || 0) >= 10000;
+        data.internsHired = dejaAvance ? 1 : 0;
       }
       return data;
     },
@@ -265,6 +296,7 @@
    *   level        niveau du joueur
    *   upgradeQty   quantité d'un producteur (`goal.upgradeId`)
    *   prestiges    nombre de Rebrandings effectués
+   *   internsHired nombre de stagiaires embauchés en fin de stage
    */
   const CHAPTERS = [
     {
@@ -285,9 +317,9 @@
       goal: { kind: 'upgradeQty', upgradeId: 'stagiaire', target: 3, label: 'Avoir 3 stagiaires' },
       reward: { prodPercent: 5 },
       rewardLabel: '+5% production',
-      unlocks: ['promotions'],
-      unlockLabel: 'les promotions — fais monter tes devs en grade',
-      unlockShort: 'les promotions',
+      unlocks: ['stagiaires'],
+      unlockLabel: 'les promos de stagiaires — 3 candidats, tu en gardes un',
+      unlockShort: 'les promos de stagiaires',
     },
     {
       id: 3,
@@ -302,6 +334,17 @@
     },
     {
       id: 4,
+      name: 'La première embauche',
+      tagline: 'Un stage, ça se termine. À toi de dire comment.',
+      goal: { kind: 'internsHired', target: 1, label: 'Embaucher un stagiaire à la fin de son stage' },
+      reward: { prodPercent: 10 },
+      rewardLabel: '+10% production',
+      unlocks: ['promotions'],
+      unlockLabel: 'les promotions — fais monter tes devs en grade',
+      unlockShort: 'les promotions',
+    },
+    {
+      id: 5,
       name: 'Le garage',
       tagline: 'Deux bureaux, une machine à café, beaucoup d\'espoir.',
       goal: { kind: 'runCredits', target: 10000, label: 'Atteindre 10 000 crédits' },
@@ -312,7 +355,7 @@
       unlockShort: 'les Bureaux',
     },
     {
-      id: 5,
+      id: 6,
       name: 'Petite agence locale',
       tagline: 'On te connaît dans le quartier.',
       goal: { kind: 'runCredits', target: 100000, label: 'Atteindre 100 000 crédits' },
@@ -323,7 +366,7 @@
       unlockShort: 'l\'Image et le Rebranding',
     },
     {
-      id: 6,
+      id: 7,
       name: 'Rebranding',
       tagline: 'Tout recommencer, mais avec un nom qui pèse.',
       goal: { kind: 'prestiges', target: 1, label: 'Faire ton premier Rebranding' },
@@ -334,7 +377,7 @@
       unlockShort: 'la boutique Réputation',
     },
     {
-      id: 7,
+      id: 8,
       name: 'Agence reconnue',
       tagline: 'Les clients viennent à toi.',
       goal: { kind: 'runCredits', target: 1e6, label: 'Atteindre 1 M de crédits sur une partie' },
@@ -345,7 +388,7 @@
       unlockShort: 'le Campus',
     },
     {
-      id: 8,
+      id: 9,
       name: 'Agence qui compte',
       tagline: 'Trois vies, trois logos, une réputation.',
       goal: { kind: 'prestiges', target: 3, label: 'Avoir fait 3 Rebrandings' },
@@ -355,7 +398,7 @@
       unlockLabel: null,
     },
     {
-      id: 9,
+      id: 10,
       name: 'Studio légendaire',
       tagline: 'On raconte ton agence dans les écoles.',
       goal: { kind: 'totalCredits', target: 1e8, label: 'Gagner 100 M de crédits en tout' },
@@ -372,7 +415,7 @@
    * terminé, ce qu'il ouvre reste hors de portée : c'est ce qui donne une
    * raison de viser le but courant plutôt que de regarder un compteur monter.
    */
-  const CHAPTER_FEATURES = ['boutique', 'events', 'promotions', 'bureaux', 'branding', 'prestige', 'reputation', 'campus'];
+  const CHAPTER_FEATURES = ['boutique', 'stagiaires', 'events', 'promotions', 'bureaux', 'branding', 'prestige', 'reputation', 'campus'];
 
   const LEVEL_BONUSES = [
     { id: 'prod2', name: '+2% production', desc: 'Bonus permanent sur la prod passive', effect: { prodPercent: 2 } },
@@ -566,6 +609,85 @@
     return Math.ceil(def.baseCost * Math.pow(def.costGrowth, getPrestigeBonusLevel(def.id)));
   }
 
+  /* ==========================================================================
+     Les stagiaires — cœur du jeu
+
+     Une promo de 3 candidats arrive régulièrement. Le joueur en garde UN SEUL,
+     les deux autres partent chez la concurrence : c'est la décision qui rythme
+     la partie. Le stagiaire choisi travaille pendant un stage à durée limitée,
+     puis il faut trancher — l'embaucher (cher, bonus définitif) ou le laisser
+     filer.
+
+     Les raretés ne sont volontairement pas ordonnées de la pire à la meilleure :
+     une Pépite produit MOINS qu'un Commun au quotidien, mais déclenche des
+     « Eurêka » qui multiplient toute la production de l'agence. Prendre la
+     Pépite, c'est parier sur la variance ; prendre le Commun, c'est du solide.
+     Sans ce compromis, le tirage n'est pas un choix mais une lecture de chiffre.
+     ========================================================================== */
+  const INTERN_DRAFT_SIZE = 3;
+  const INTERN_STAGE_MS = 3 * 60 * 1000;
+  /** Délai avant la promo suivante, une fois la décision de fin de stage prise. */
+  const INTERN_COOLDOWN_MS = 30 * 1000;
+  const INTERN_EUREKA_ROLL_MS = 20 * 1000;
+  /** Plancher du coût d'embauche, pour que le tout début de partie reste jouable. */
+  const INTERN_HIRE_COST_MIN = 250;
+  /** Le coût d'embauche vaut ~4 min de production, multiplié par la rareté. */
+  const INTERN_HIRE_COST_SECONDS = 240;
+  /** Un stagiaire embauché laisse son bonus à l'agence : on garde la liste courte. */
+  const INTERN_ROSTER_MAX = 12;
+
+  const INTERN_RARITIES = {
+    commun: {
+      id: 'commun', label: 'Commun', weight: 58, symbol: '○',
+      prodPercent: 20, hireBonusPercent: 2, costFactor: 1,
+      eurekaChance: 0, eurekaMultiplier: 1, eurekaMs: 0,
+      blurb: 'Régulier, sérieux, sans surprise.',
+    },
+    prometteur: {
+      id: 'prometteur', label: 'Prometteur', weight: 30, symbol: '◆',
+      prodPercent: 15, hireBonusPercent: 4, costFactor: 2,
+      eurekaChance: 0.12, eurekaMultiplier: 3, eurekaMs: 12 * 1000,
+      blurb: 'Produit bien, et trouve régulièrement quelque chose.',
+    },
+    pepite: {
+      id: 'pepite', label: 'Pépite', weight: 12, symbol: '★',
+      prodPercent: 5, hireBonusPercent: 9, costFactor: 4,
+      eurekaChance: 0.18, eurekaMultiplier: 6, eurekaMs: 8 * 1000,
+      blurb: 'Produit peu — mais quand ça part, ça part fort.',
+    },
+  };
+
+  /*
+   * Équilibrage des raretés, mesuré en simulant un stage de 3 minutes :
+   * Commun x1,20 · Prometteur x1,30 · Pépite x1,39 de production moyenne.
+   *
+   * L'écart est volontairement resserré (16%, contre 78% dans un premier jet).
+   * Une Pépite nettement supérieure en moyenne ferait du tirage une fausse
+   * décision : on prendrait toujours la plus rare, sans lire les cartes. Ici la
+   * Pépite gagne peu en moyenne mais varie énormément — 20% des stages sans
+   * aucun Eurêka, 44% avec au moins deux — et coûte 4x plus cher à embaucher.
+   *
+   * Surtout, le TRAIT pèse autant que la rareté : un Prometteur stressé (x1,40)
+   * vaut une Pépite ordinaire (x1,39). C'est ce qui oblige à comparer les trois
+   * candidats au lieu de repérer le symbole.
+   */
+
+  /**
+   * Chaque candidat porte un trait, et chaque trait a un effet réel. C'est ce
+   * qui empêche le tirage de se résumer à « prends la meilleure rareté » : un
+   * Commun consciencieux peut battre un Prometteur stressé.
+   */
+  const INTERN_TRAITS = [
+    { id: 'consciencieux', name: 'Consciencieux', desc: '+30% de sa production', prodMult: 1.3 },
+    { id: 'genie', name: 'Génie du dimanche', desc: '+60% de chance d\'Eurêka', eurekaChanceMult: 1.6 },
+    { id: 'zen', name: 'Zen', desc: 'Stage 50% plus long', stageMult: 1.5 },
+    { id: 'stresse', name: 'Stressé', desc: '-25% de production, Eurêka 2x plus fréquents', prodMult: 0.75, eurekaChanceMult: 2 },
+    { id: 'perfectionniste', name: 'Perfectionniste', desc: 'Eurêka 50% plus longs', eurekaMsMult: 1.5 },
+    { id: 'bricoleur', name: 'Bricoleur', desc: 'Embauche 40% moins chère', costMult: 0.6 },
+    { id: 'reveur', name: 'Rêveur', desc: 'Bonus d\'embauche x1,5', hireBonusMult: 1.5 },
+    { id: 'pragmatique', name: 'Pragmatique', desc: '+15% de production, embauche 20% moins chère', prodMult: 1.15, costMult: 0.8 },
+  ];
+
   let state = {
     credits: 0,
     clickPower: 1,
@@ -602,6 +724,22 @@
     prestigeCount: 0,
     /** Passe à vrai une fois le dernier chapitre terminé. */
     gameCompleted: false,
+    /** Le stagiaire en stage, ou null. Voir le bloc « Les stagiaires ». */
+    intern: null,
+    /** Les 3 candidats d'une promo en attente de choix, ou null. */
+    internDraft: null,
+    /** Quand la prochaine promo devient disponible. */
+    nextInternDraftAt: 0,
+    /** Prochain tirage d'Eurêka pour le stagiaire en cours. */
+    nextEurekaRollAt: 0,
+    /** Fin de l'Eurêka en cours (0 si aucun). */
+    eurekaUntil: 0,
+    /** Bonus de production définitif laissé par les stagiaires embauchés, en %. */
+    internHireBonusPercent: 0,
+    /** Nombre de stagiaires embauchés. Sert de but au chapitre 4. */
+    internsHired: 0,
+    /** Les derniers embauchés, pour l'affichage. */
+    hiredInterns: [],
     reputation: 0,
     unlockedEmployeeUpgrades: [],
     prestigeBonuses: {},
@@ -1098,6 +1236,13 @@
     const cafeDef = getBrandingDef('cafe');
     if (cafe && cafe.quantity > 0 && cafeDef && cafeDef.activeBonus) total *= 1 + cafeDef.activeBonus;
 
+    // Stagiaires : le bonus du stage en cours, celui laissé par les embauchés,
+    // puis l'Eurêka. L'Eurêka vient en dernier et multiplie tout le reste —
+    // c'est ce qui en fait un « gros progrès » et pas un bonus de plus.
+    total *= 1 + getInternProdPercent() / 100;
+    total *= 1 + (state.internHireBonusPercent || 0) / 100;
+    total *= getEurekaMultiplier();
+
     return total * GLOBAL_PRODUCTION_SCALE;
   }
 
@@ -1318,6 +1463,7 @@
       case 'level': current = state.playerLevel || 1; break;
       case 'upgradeQty': current = (getUpgradeState(goal.upgradeId)?.quantity || 0); break;
       case 'prestiges': current = state.prestigeCount || 0; break;
+      case 'internsHired': current = state.internsHired || 0; break;
       default: return null;
     }
     const target = goal.target;
@@ -1407,6 +1553,205 @@
     hideChapterCompleteModal();
     applyChapterUnlocks();
     renderAll();
+  }
+
+  /* ==========================================================================
+     Les stagiaires — logique
+     ========================================================================== */
+
+  function getInternRarity(id) { return INTERN_RARITIES[id] || INTERN_RARITIES.commun; }
+  function getInternTrait(id) { return INTERN_TRAITS.find((t) => t.id === id) || null; }
+
+  function pickInternRarityId() {
+    const ids = Object.keys(INTERN_RARITIES);
+    const total = ids.reduce((sum, id) => sum + INTERN_RARITIES[id].weight, 0);
+    let roll = Math.random() * total;
+    for (const id of ids) {
+      roll -= INTERN_RARITIES[id].weight;
+      if (roll <= 0) return id;
+    }
+    return ids[0];
+  }
+
+  /**
+   * Fabrique un candidat complet. Les effets du trait sont appliqués ICI et le
+   * résultat est figé sur l'objet : ce que le joueur lit sur la carte est
+   * exactement ce qu'il obtiendra, et la sauvegarde n'a pas à rejouer le calcul.
+   */
+  /**
+   * Les traits qui portent sur l'Eurêka n'ont aucun sens sur un profil qui n'en
+   * déclenchera jamais : « +60% de chance d'Eurêka » sur un Commun, c'est 60%
+   * de zéro. Pire, « Stressé » deviendrait un malus pur (-25% de production
+   * contre une contrepartie morte). On les retire du tirage pour ces profils.
+   */
+  function internTraitPool(rarity) {
+    if (rarity.eurekaChance > 0) return INTERN_TRAITS;
+    return INTERN_TRAITS.filter((t) => !t.eurekaChanceMult && !t.eurekaMsMult);
+  }
+
+  function generateInternCandidate() {
+    const rarityId = pickInternRarityId();
+    const rarity = getInternRarity(rarityId);
+    const trait = pickRandom(internTraitPool(rarity));
+    const prodPercent = Math.round(rarity.prodPercent * (trait.prodMult || 1) * 10) / 10;
+    const hireBonusPercent = Math.round(rarity.hireBonusPercent * (trait.hireBonusMult || 1) * 10) / 10;
+    return {
+      id: randomId(),
+      name: pickRandom(FIRST_NAMES) + ' ' + pickRandom(LAST_NAMES),
+      rarity: rarityId,
+      traitId: trait.id,
+      prodPercent: prodPercent,
+      hireBonusPercent: hireBonusPercent,
+      eurekaChance: rarity.eurekaChance * (trait.eurekaChanceMult || 1),
+      eurekaMultiplier: rarity.eurekaMultiplier,
+      eurekaMs: Math.round(rarity.eurekaMs * (trait.eurekaMsMult || 1)),
+      stageMs: Math.round(INTERN_STAGE_MS * (trait.stageMult || 1)),
+      costFactor: rarity.costFactor * (trait.costMult || 1),
+    };
+  }
+
+  /**
+   * Le coût d'embauche est calculé au moment du choix, puis figé pour tout le
+   * stage. Le recalculer en continu le ferait exploser pendant un Eurêka (la
+   * production est multipliée par 6) et le joueur ne pourrait rien anticiper.
+   */
+  function computeInternHireCost(candidate) {
+    const perSec = getProductionPerSecond();
+    const cost = Math.floor(perSec * INTERN_HIRE_COST_SECONDS * candidate.costFactor);
+    return Math.max(INTERN_HIRE_COST_MIN, cost);
+  }
+
+  function openInternDraft() {
+    if (!isFeatureUnlocked('stagiaires')) return;
+    if (state.intern || state.internDraft) return;
+    const candidates = [];
+    for (let i = 0; i < INTERN_DRAFT_SIZE; i++) candidates.push(generateInternCandidate());
+    state.internDraft = { candidates: candidates, createdAt: Date.now() };
+    save();
+  }
+
+  /** Le joueur garde un candidat : les deux autres sont perdus, c'est le sel du choix. */
+  function chooseInternCandidate(candidateId) {
+    if (!state.internDraft) return;
+    const candidate = (state.internDraft.candidates || []).find((c) => c.id === candidateId);
+    if (!candidate) return;
+    const now = Date.now();
+    state.intern = Object.assign({}, candidate, {
+      startedAt: now,
+      endsAt: now + candidate.stageMs,
+      hireCost: computeInternHireCost(candidate),
+      eurekaCount: 0,
+      decided: false,
+    });
+    state.internDraft = null;
+    state.nextEurekaRollAt = now + INTERN_EUREKA_ROLL_MS;
+    state.eurekaUntil = 0;
+    closeInternDraftModal();
+    save();
+    renderIntern();
+    renderAll();
+  }
+
+  function isInternStageOver() {
+    return !!state.intern && Date.now() >= state.intern.endsAt;
+  }
+
+  function isEurekaActive() {
+    return !!state.intern && (state.eurekaUntil || 0) > Date.now();
+  }
+
+  /** Bonus de production du stagiaire en stage. Nul une fois le stage terminé. */
+  function getInternProdPercent() {
+    if (!state.intern || isInternStageOver()) return 0;
+    return state.intern.prodPercent || 0;
+  }
+
+  function getEurekaMultiplier() {
+    return isEurekaActive() ? (state.intern.eurekaMultiplier || 1) : 1;
+  }
+
+  /**
+   * Tire un Eurêka. C'est le « gros progrès » ponctuel : toute la production de
+   * l'agence est multipliée pendant quelques dizaines de secondes. On ne tire
+   * pas pendant un Eurêka en cours, sinon les Pépites les enchaîneraient.
+   */
+  function rollEureka() {
+    if (!state.intern || isInternStageOver()) return;
+    const now = Date.now();
+    if (now < (state.nextEurekaRollAt || 0)) return;
+    state.nextEurekaRollAt = now + INTERN_EUREKA_ROLL_MS;
+    if (isEurekaActive()) return;
+    if (!(state.intern.eurekaChance > 0)) return;
+    if (Math.random() >= state.intern.eurekaChance) return;
+    state.eurekaUntil = now + (state.intern.eurekaMs || 20000);
+    state.intern.eurekaCount = (state.intern.eurekaCount || 0) + 1;
+    showEurekaBurst();
+  }
+
+  function hireIntern() {
+    if (!state.intern || !isInternStageOver()) return;
+    const cost = state.intern.hireCost || INTERN_HIRE_COST_MIN;
+    if (!canAfford(cost)) return;
+    state.credits -= cost;
+    state.internHireBonusPercent = Math.round(((state.internHireBonusPercent || 0) + (state.intern.hireBonusPercent || 0)) * 10) / 10;
+    state.internsHired = (state.internsHired || 0) + 1;
+    state.hiredInterns = state.hiredInterns || [];
+    state.hiredInterns.unshift({
+      name: state.intern.name,
+      rarity: state.intern.rarity,
+      bonusPercent: state.intern.hireBonusPercent,
+    });
+    if (state.hiredInterns.length > INTERN_ROSTER_MAX) state.hiredInterns.length = INTERN_ROSTER_MAX;
+    const nom = state.intern.name;
+    const bonus = state.intern.hireBonusPercent;
+    endInternStage();
+    showToast(nom + ' rejoint l\'agence. +' + bonus + '% de production, définitivement.', 4000);
+  }
+
+  function releaseIntern() {
+    if (!state.intern || !isInternStageOver()) return;
+    const nom = state.intern.name;
+    endInternStage();
+    showToast(nom + ' part chez la concurrence.', 3000);
+  }
+
+  function endInternStage() {
+    state.intern = null;
+    state.eurekaUntil = 0;
+    state.nextEurekaRollAt = 0;
+    state.nextInternDraftAt = Date.now() + INTERN_COOLDOWN_MS;
+    hideInternEndModal();
+    save();
+    renderIntern();
+    renderAll();
+  }
+
+  /**
+   * Appelée par la boucle. Fait avancer le stage, tire les Eurêka, et fait
+   * arriver la promo suivante. Rien n'expire jamais tout seul : une promo en
+   * attente et une fin de stage non tranchée patientent aussi longtemps qu'il
+   * faut — le joueur ne doit pas être puni d'avoir fermé l'application.
+   */
+  function tickInterns() {
+    if (!isFeatureUnlocked('stagiaires')) return;
+    const now = Date.now();
+    if (state.intern) {
+      rollEureka();
+      if (isInternStageOver() && !state.intern.endAnnounced) {
+        state.intern.endAnnounced = true;
+        save();
+        renderIntern();
+        showInternEndModal();
+      }
+      return;
+    }
+    if (state.internDraft) return;
+    if (!state.nextInternDraftAt) state.nextInternDraftAt = now;
+    if (now >= state.nextInternDraftAt) {
+      openInternDraft();
+      renderIntern();
+      showToast('Une promo de ' + INTERN_DRAFT_SIZE + ' stagiaires t\'attend.', 3500);
+    }
   }
 
   /**
@@ -1632,6 +1977,14 @@
         prestigeCount: state.prestigeCount,
         gameCompleted: state.gameCompleted,
         prestigeBonusLevels: state.prestigeBonusLevels,
+        intern: state.intern,
+        internDraft: state.internDraft,
+        nextInternDraftAt: state.nextInternDraftAt,
+        nextEurekaRollAt: state.nextEurekaRollAt,
+        eurekaUntil: state.eurekaUntil,
+        internHireBonusPercent: state.internHireBonusPercent,
+        internsHired: state.internsHired,
+        hiredInterns: state.hiredInterns,
         reputation: state.reputation,
         unlockedEmployeeUpgrades: state.unlockedEmployeeUpgrades,
         prestigeBonuses: state.prestigeBonuses,
@@ -1801,6 +2154,16 @@
       if (typeof data.prestigeCount === 'number') state.prestigeCount = data.prestigeCount;
       if (typeof data.gameCompleted === 'boolean') state.gameCompleted = data.gameCompleted;
       if (data.prestigeBonusLevels) state.prestigeBonusLevels = data.prestigeBonusLevels;
+      if (data.intern && typeof data.intern === 'object') state.intern = data.intern;
+      if (data.internDraft && Array.isArray(data.internDraft.candidates)) state.internDraft = data.internDraft;
+      if (typeof data.nextInternDraftAt === 'number') state.nextInternDraftAt = data.nextInternDraftAt;
+      if (typeof data.nextEurekaRollAt === 'number') state.nextEurekaRollAt = data.nextEurekaRollAt;
+      if (typeof data.eurekaUntil === 'number') state.eurekaUntil = data.eurekaUntil;
+      if (typeof data.internHireBonusPercent === 'number') state.internHireBonusPercent = data.internHireBonusPercent;
+      if (typeof data.internsHired === 'number') state.internsHired = data.internsHired;
+      if (Array.isArray(data.hiredInterns)) state.hiredInterns = data.hiredInterns;
+      // Un Eurêka ne court pas pendant l'absence : il durerait des heures.
+      if ((state.eurekaUntil || 0) > Date.now()) state.eurekaUntil = 0;
       if (data.chapterBonuses) state.chapterBonuses = data.chapterBonuses;
       if (typeof data.reputation === 'number') state.reputation = data.reputation;
       if (Array.isArray(data.unlockedEmployeeUpgrades)) state.unlockedEmployeeUpgrades = data.unlockedEmployeeUpgrades;
@@ -2408,6 +2771,218 @@
     if (ch) document.body.setAttribute('data-chapter-name', ch.name);
   }
 
+  /* ==========================================================================
+     Les stagiaires — affichage
+     ========================================================================== */
+
+  function internRarityBadge(rarityId) {
+    const r = getInternRarity(rarityId);
+    return '<span class="intern-rarity" data-rarity="' + r.id + '">' + r.symbol + ' ' + r.label + '</span>';
+  }
+
+  function formatMs(ms) {
+    const s = Math.max(0, Math.ceil(ms / 1000));
+    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  }
+
+  /** Les lignes de stats d'un candidat, réutilisées par le tirage et par la carte. */
+  function internStatsHtml(c) {
+    const trait = getInternTrait(c.traitId);
+    const eureka = c.eurekaChance > 0
+      ? 'Eurêka x' + c.eurekaMultiplier + ' pendant ' + Math.round(c.eurekaMs / 1000) + ' s'
+      : 'Jamais d\'Eurêka';
+    return '<div class="intern-stats">' +
+      '<span class="intern-stat"><b>+' + c.prodPercent + '%</b> production</span>' +
+      '<span class="intern-stat' + (c.eurekaChance > 0 ? ' intern-stat-eureka' : '') + '">' + eureka + '</span>' +
+      '<span class="intern-stat"><b>+' + c.hireBonusPercent + '%</b> définitif si embauché</span>' +
+      (trait ? '<span class="intern-trait">' + escapeHtml(trait.name) + ' — ' + escapeHtml(trait.desc) + '</span>' : '') +
+      '</div>';
+  }
+
+  /**
+   * La carte stagiaire de l'accueil. Elle a quatre états : promo à venir, promo
+   * disponible, stage en cours, décision en attente. On ne reconstruit le HTML
+   * que quand l'état change de forme ; le compte à rebours est mis à jour à
+   * part par updateInternTimer(), pour ne pas recréer de DOM 4 fois par seconde.
+   */
+  function renderIntern() {
+    const card = document.getElementById('intern-card');
+    if (!card) return;
+    if (!isFeatureUnlocked('stagiaires')) {
+      card.hidden = true;
+      rendered.internSig = null;
+      return;
+    }
+    card.hidden = false;
+
+    let mode;
+    if (state.intern && isInternStageOver()) mode = 'decision';
+    else if (state.intern) mode = 'stage';
+    else if (state.internDraft) mode = 'promo';
+    else mode = 'attente';
+
+    const sig = [mode, state.intern ? state.intern.id : '', isEurekaActive() ? 'e' : '',
+      state.intern ? state.intern.eurekaCount : ''].join('|');
+    card.setAttribute('data-mode', mode);
+    card.setAttribute('data-eureka', isEurekaActive() ? 'true' : 'false');
+    if (rendered.internSig === sig) { updateInternTimer(); return; }
+    rendered.internSig = sig;
+
+    if (mode === 'promo') {
+      card.innerHTML =
+        '<div class="intern-head"><span class="intern-kicker">Promo de stagiaires</span></div>' +
+        '<p class="intern-line">' + INTERN_DRAFT_SIZE + ' candidats se présentent. Tu ne peux en garder qu\'un.</p>' +
+        '<button type="button" class="intern-cta" id="intern-open-draft">Voir les candidats</button>';
+      document.getElementById('intern-open-draft').addEventListener('click', openInternDraftModal);
+      return;
+    }
+
+    if (mode === 'attente') {
+      card.innerHTML =
+        '<div class="intern-head"><span class="intern-kicker">Stagiaires</span></div>' +
+        '<p class="intern-line">Prochaine promo dans <b id="intern-countdown">--</b></p>' +
+        '<div class="intern-bar"><span class="intern-bar-fill" id="intern-bar-fill"></span></div>' +
+        (state.internsHired > 0
+          ? '<p class="intern-roster">' + state.internsHired + ' embauché' + (state.internsHired > 1 ? 's' : '') +
+            ' · <b>+' + state.internHireBonusPercent + '%</b> de production définitive</p>'
+          : '<p class="intern-roster">Personne n\'a encore été embauché.</p>');
+      updateInternTimer();
+      return;
+    }
+
+    const c = state.intern;
+    if (mode === 'stage') {
+      card.innerHTML =
+        '<div class="intern-head">' +
+          '<span class="intern-name">' + escapeHtml(c.name) + '</span>' +
+          internRarityBadge(c.rarity) +
+        '</div>' +
+        internStatsHtml(c) +
+        '<div class="intern-bar"><span class="intern-bar-fill" id="intern-bar-fill"></span></div>' +
+        '<p class="intern-foot">Fin du stage dans <b id="intern-countdown">--</b>' +
+          (c.eurekaCount > 0 ? ' · <b>' + c.eurekaCount + '</b> Eurêka' + (c.eurekaCount > 1 ? 's' : '') : '') +
+        '</p>' +
+        // Pas de bannière pour un profil qui ne déclenchera jamais d'Eurêka :
+        // elle afficherait « production x1 ».
+        (c.eurekaChance > 0
+          ? '<div class="intern-eureka-banner" id="intern-eureka-banner" hidden>⚡ EURÊKA — production x' + c.eurekaMultiplier + '</div>'
+          : '');
+      updateInternTimer();
+      return;
+    }
+
+    // decision
+    card.innerHTML =
+      '<div class="intern-head">' +
+        '<span class="intern-name">' + escapeHtml(c.name) + '</span>' +
+        internRarityBadge(c.rarity) +
+      '</div>' +
+      '<p class="intern-line">Stage terminé. À toi de décider.</p>' +
+      '<button type="button" class="intern-cta" id="intern-open-end">Voir le bilan</button>';
+    document.getElementById('intern-open-end').addEventListener('click', showInternEndModal);
+  }
+
+  /** Compte à rebours et barre : mis à jour seul, sans reconstruire la carte. */
+  function updateInternTimer() {
+    const countdown = document.getElementById('intern-countdown');
+    const fill = document.getElementById('intern-bar-fill');
+    const now = Date.now();
+    let remaining = 0;
+    let ratio = 0;
+    if (state.intern && !isInternStageOver()) {
+      remaining = state.intern.endsAt - now;
+      const total = state.intern.endsAt - state.intern.startedAt;
+      ratio = total > 0 ? 1 - remaining / total : 1;
+    } else if (!state.intern && !state.internDraft) {
+      remaining = (state.nextInternDraftAt || now) - now;
+      ratio = INTERN_COOLDOWN_MS > 0 ? 1 - remaining / INTERN_COOLDOWN_MS : 1;
+    }
+    if (countdown) countdown.textContent = formatMs(remaining);
+    if (fill) fill.style.width = Math.max(0, Math.min(100, ratio * 100)) + '%';
+    const banner = document.getElementById('intern-eureka-banner');
+    if (banner) banner.hidden = !isEurekaActive();
+  }
+
+  /* --- Modale de tirage --- */
+
+  function openInternDraftModal() {
+    const modal = document.getElementById('intern-draft-modal');
+    const list = document.getElementById('intern-draft-list');
+    if (!modal || !list || !state.internDraft) return;
+    list.innerHTML = '';
+    (state.internDraft.candidates || []).forEach((c, i) => {
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'intern-candidate';
+      card.setAttribute('data-rarity', c.rarity);
+      card.style.animationDelay = (i * 90) + 'ms';
+      card.innerHTML =
+        '<div class="intern-head">' +
+          '<span class="intern-name">' + escapeHtml(c.name) + '</span>' +
+          internRarityBadge(c.rarity) +
+        '</div>' +
+        '<p class="intern-blurb">' + escapeHtml(getInternRarity(c.rarity).blurb) + '</p>' +
+        internStatsHtml(c) +
+        '<span class="intern-pick">Le prendre</span>';
+      card.addEventListener('click', () => chooseInternCandidate(c.id));
+      list.appendChild(card);
+    });
+    modal.hidden = false;
+  }
+
+  function closeInternDraftModal() {
+    const modal = document.getElementById('intern-draft-modal');
+    if (modal) modal.hidden = true;
+  }
+
+  /* --- Modale de fin de stage --- */
+
+  function showInternEndModal() {
+    const modal = document.getElementById('intern-end-modal');
+    const c = state.intern;
+    if (!modal || !c) return;
+    setText('intern-end-name', c.name);
+    const rarityEl = document.getElementById('intern-end-rarity');
+    if (rarityEl) rarityEl.innerHTML = internRarityBadge(c.rarity);
+    setText('intern-end-report', c.eurekaCount > 0
+      ? 'Bilan du stage : ' + c.eurekaCount + ' Eurêka' + (c.eurekaCount > 1 ? 's' : '') + ' déclenché' + (c.eurekaCount > 1 ? 's' : '') + '.'
+      : 'Bilan du stage : aucun Eurêka.');
+    const cost = c.hireCost || INTERN_HIRE_COST_MIN;
+    const affordable = canAfford(cost);
+    const hireBtn = document.getElementById('intern-end-hire');
+    if (hireBtn) {
+      hireBtn.innerHTML = 'Embaucher · ' + formatNumber(cost) + ' crédits' +
+        '<span class="intern-end-gain">+' + c.hireBonusPercent + '% de production, définitivement</span>';
+      hireBtn.disabled = !affordable;
+      hireBtn.classList.toggle('too-expensive', !affordable);
+    }
+    setText('intern-end-hint', affordable
+      ? 'Le laisser partir ne coûte rien — mais tout ce qu\'il apportait s\'en va avec lui.'
+      : 'Il te manque ' + formatNumber(cost - Math.floor(state.credits)) + ' crédits. Tu peux continuer à jouer : la décision t\'attend.');
+    modal.hidden = false;
+  }
+
+  function hideInternEndModal() {
+    const modal = document.getElementById('intern-end-modal');
+    if (modal) modal.hidden = true;
+  }
+
+  /** L'Eurêka est le moment spectaculaire du jeu : il doit se voir. */
+  function showEurekaBurst() {
+    renderIntern();
+    const layer = document.getElementById('eureka-layer');
+    if (layer) {
+      const el = document.createElement('div');
+      el.className = 'eureka-burst';
+      el.textContent = '⚡ EURÊKA';
+      layer.appendChild(el);
+      setTimeout(function () { el.remove(); }, 2200);
+    }
+    document.body.classList.add('eureka-active');
+    showToast((state.intern ? state.intern.name : 'Ton stagiaire') + ' a trouvé quelque chose. Production x' +
+      (state.intern ? state.intern.eurekaMultiplier : 1) + ' !', 4000);
+  }
+
   /**
    * Le but courant, affiché en permanence sur l'accueil. C'est la réponse à
    * « je joue pour quoi, là, maintenant » : un titre, une phrase, une barre et
@@ -2915,6 +3490,7 @@
       case 'accueil':
         renderClickValue();
         renderChapterGoal();
+        renderIntern();
         renderQuests();
         break;
       case 'candidats':
@@ -2957,6 +3533,7 @@
     renderReputation();
     renderChapter();
     renderChapterGoal();
+    renderIntern();
     renderQuests();
     renderRecruitmentContracts();
     renderSkillTree();
@@ -3092,6 +3669,7 @@
       lastLogicRefresh = nowMs;
       maybeTriggerEvent();
       maybeAgencyEvent(logicDt);
+      tickInterns();
       checkQuests();
       checkChapterObjective();
       processContrats();
@@ -3108,7 +3686,9 @@
       if (isTabActive('accueil')) {
         renderChapterGoal();
         updateQuestsProgress();
+        renderIntern();
       }
+      document.body.classList.toggle('eureka-active', isEurekaActive());
       updateUpgradesAffordability();
       if (isTabActive('plus')) {
         updateContratsUI();
@@ -3313,6 +3893,16 @@
     });
     document.getElementById('chapter-complete-ok')?.addEventListener('click', completeChapterAndContinue);
     document.getElementById('game-complete-ok')?.addEventListener('click', hideGameCompleteModal);
+    document.getElementById('intern-draft-modal-close')?.addEventListener('click', closeInternDraftModal);
+    document.getElementById('intern-draft-modal')?.addEventListener('click', function (e) {
+      if (e.target === this) closeInternDraftModal();
+    });
+    document.getElementById('intern-end-modal-close')?.addEventListener('click', hideInternEndModal);
+    document.getElementById('intern-end-modal')?.addEventListener('click', function (e) {
+      if (e.target === this) hideInternEndModal();
+    });
+    document.getElementById('intern-end-hire')?.addEventListener('click', hireIntern);
+    document.getElementById('intern-end-release')?.addEventListener('click', releaseIntern);
     document.getElementById('game-complete-modal-close')?.addEventListener('click', hideGameCompleteModal);
     document.getElementById('levelup-validate-btn')?.addEventListener('click', function () {
       if (levelUpSelectedId) {

@@ -1068,18 +1068,6 @@ body.tapstorm-theme #game-screen .tapstorm-cta:hover {
 body.tapstorm-theme #game-screen .clicker-section {
   margin-bottom: 8px;
 }
-body.tapstorm-theme #game-screen .accueil-code-window {
-  background: linear-gradient(180deg, rgba(45, 27, 105, 0.95) 0%, rgba(30, 20, 60, 0.98) 100%);
-  border-color: rgba(139, 92, 246, 0.6);
-}
-body.tapstorm-theme #game-screen .accueil-code-title {
-  color: rgba(255, 255, 255, 0.8);
-  border-bottom-color: rgba(139, 92, 246, 0.4);
-}
-body.tapstorm-theme #game-screen .accueil-code-row .accueil-cursor {
-  background: #c4b5fd;
-  box-shadow: 0 0 16px rgba(196, 181, 253, 0.9);
-}
 body.tapstorm-theme .click-profit-popup {
   color: #4ade80;
   text-shadow: 0 0 10px rgba(74, 222, 128, 0.6), 0 1px 2px rgba(0, 0, 0, 0.4);
@@ -1741,3 +1729,73 @@ body.tapstorm-theme #game-screen .prestige-level {
   color: #a78bfa;
 }
 
+/* ============================================================================
+   Les stagiaires — thème TapStorm
+
+   Même raison que pour la carte de but : `style.css` est chargé après
+   `game.css` et y redéfinit `--text` en #1a1a2e. Les couleurs du thème vivant
+   sont posées en dur ici.
+   ========================================================================== */
+body.tapstorm-theme #game-screen .intern-card {
+  background: linear-gradient(140deg, rgba(30, 22, 37, 0.95), rgba(45, 27, 105, 0.35));
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  border-radius: 16px;
+  padding: 16px;
+  margin: 0 0 16px;
+}
+body.tapstorm-theme #game-screen .intern-kicker { color: #a5b4fc; }
+body.tapstorm-theme #game-screen .intern-name { color: #f1f1f4; }
+body.tapstorm-theme #game-screen .intern-line,
+body.tapstorm-theme #game-screen .intern-foot,
+body.tapstorm-theme #game-screen .intern-roster,
+body.tapstorm-theme #game-screen .intern-stat { color: #f1f1f4; }
+body.tapstorm-theme #game-screen .intern-blurb,
+body.tapstorm-theme #game-screen .intern-trait { color: #a5b4fc; }
+body.tapstorm-theme #game-screen .intern-stat-eureka { color: #fbbf24; }
+body.tapstorm-theme #game-screen .intern-bar {
+  background: rgba(15, 14, 23, 0.8);
+  border: 1px solid rgba(139, 92, 246, 0.25);
+}
+body.tapstorm-theme #game-screen .intern-bar-fill {
+  background: linear-gradient(90deg, #7c3aed, #a78bfa);
+}
+body.tapstorm-theme #game-screen .intern-cta,
+body.tapstorm-theme #game-screen .intern-pick,
+body.tapstorm-theme #game-screen .intern-end-hire {
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  color: #fff;
+  border: none;
+}
+body.tapstorm-theme #game-screen .intern-card[data-mode="promo"],
+body.tapstorm-theme #game-screen .intern-card[data-mode="decision"] {
+  border-color: #a78bfa;
+}
+body.tapstorm-theme #game-screen .intern-card[data-mode="promo"] {
+  animation: intern-card-enter 0.45s ease-out, intern-waiting-tapstorm 2s ease-in-out 0.45s infinite;
+}
+@keyframes intern-waiting-tapstorm {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(167, 139, 250, 0); }
+  50% { box-shadow: 0 0 0 5px rgba(167, 139, 250, 0.18); }
+}
+body.tapstorm-theme #game-screen .intern-candidate {
+  background: rgba(30, 22, 37, 0.9);
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  color: #f1f1f4;
+}
+body.tapstorm-theme #game-screen .intern-end-kicker,
+body.tapstorm-theme #game-screen .intern-end-hint {
+  color: #a5b4fc;
+}
+body.tapstorm-theme #game-screen .intern-end-report { color: #f1f1f4; }
+body.tapstorm-theme #game-screen .intern-end-release {
+  background: transparent;
+  color: #a5b4fc;
+  border: 1px solid rgba(139, 92, 246, 0.4);
+}
+
+/* Pendant un Eurêka, tout l'écran vire à l'or : c'est le moment fort du jeu. */
+body.eureka-active #game-screen.app {
+  background-image: radial-gradient(ellipse 120% 80% at 50% -20%, rgba(251, 191, 36, 0.28) 0%, transparent 55%),
+    radial-gradient(ellipse 80% 50% at 80% 50%, rgba(120, 53, 15, 0.35) 0%, transparent 50%);
+}
+body.eureka-active #game-screen .header-credits { color: #fbbf24; }
