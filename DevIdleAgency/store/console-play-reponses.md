@@ -90,8 +90,12 @@ Source : `docs/confidentialite.html` à la racine du dépôt.
 
 ## Autorisations Android
 
-À vérifier avant l'envoi, dans `android/app/src/main/AndroidManifest.xml` :
-seule `INTERNET` devrait rester, et elle est ajoutée par défaut par Capacitor.
-Si elle n'est utilisée par rien, on peut la retirer — mais la WebView la
-demande généralement pour charger ses propres fichiers locaux, donc la laisser
-est sans conséquence sur la déclaration de collecte.
+**Vérifié le 2026-09-02** dans `android/app/src/main/AndroidManifest.xml` :
+`INTERNET` est la seule déclarée, et elle vient du modèle Capacitor. La WebView
+la demande pour charger ses propres fichiers locaux ; la laisser est sans
+conséquence sur la déclaration de collecte.
+
+Vérifié en même temps, à l'appui du « non » plus haut : aucun `fetch`, aucun
+`XMLHttpRequest`, aucun `WebSocket`, aucun `sendBeacon` dans `public/game.js`,
+`src/` ni `index.html`, et le `dist/` produit ne référence aucune adresse
+externe hors commentaires.

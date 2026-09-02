@@ -25,6 +25,22 @@ npm run build     # sortie dans dist/
 npm run preview   # sert dist/ sur http://localhost:4173
 ```
 
+## Tests
+
+```bash
+npm test              # migrations de sauvegarde, chapitres, stagiaires, son…
+npm run equilibrage   # simule une partie et date chaque chapitre
+```
+
+`npm test` n'utilise aucun framework : Node + jsdom, un seul fichier
+(`tests/save-migration.test.mjs`). `game.js` étant une IIFE qui n'exporte rien,
+le test la recompile en lui ajoutant un export sur `window`.
+
+`npm run equilibrage` joue la partie en accéléré (achat glouton, 2 clics/s) et
+imprime à quelle minute chaque chapitre tombe. C'est l'outil à relancer après
+tout changement de coût, de palier ou de but de chapitre. Il ne modélise **pas**
+le prestige : ses dates sont un plancher, pas une prévision.
+
 ## Application Android
 
 Le projet natif est déjà généré (`android/`) et versionné. Il n'y a plus de
@@ -120,7 +136,24 @@ Sans `keystore.properties`, une compilation de release s'arrête avec un message
 explicite plutôt que de produire un artefact non signé que le Store refuserait.
 Les compilations de debug, elles, n'ont besoin de rien.
 
-### 4. À chaque nouvelle version
+### 4. Remplir la fiche
+
+Tout ce que la console réclame est prêt dans `store/` : l'icône 512×512, le
+bandeau 1024×500, six captures en 1080×1920, les textes de la fiche
+(`fiche-play-store.md`) et les réponses aux questionnaires « sécurité des
+données » et « classification du contenu » (`console-play-reponses.md`).
+
+Un point reste à faire une fois, hors du dépôt : la console exige une **URL
+publique de politique de confidentialité**. Le document existe
+(`docs/confidentialite.html`, à la racine du dépôt) ; il suffit d'activer GitHub
+Pages sur la branche `main`, dossier `/docs`, dans *Settings → Pages*. L'adresse
+devient alors :
+
+```
+https://wapin-dev.github.io/dev-idle/confidentialite.html
+```
+
+### 5. À chaque nouvelle version
 
 Incrémenter `versionCode` (entier, strictement croissant, invisible pour le
 joueur) et `versionName` (la version affichée) dans
@@ -145,23 +178,34 @@ Le Play Store demande en plus un visuel **512 × 512** au dépôt : utiliser
 ## Structure
 
 - `index.html` – toute la structure de l'interface (onglets, modales)
-- `public/game.js` – **la logique du jeu** : état, boucle, production, upgrades,
-  objectifs, prestige, sauvegarde (~2500 lignes, non bundlé, chargé par une
-  balise `<script>` injectée depuis `main.ts`)
+- `public/game.js` – **la logique du jeu** : état, boucle, chapitres,
+  production, upgrades, arbre de compétences, stagiaires, objectifs, événements,
+  son, prestige, sauvegarde (~5200 lignes, non bundlé, chargé par une balise
+  `<script>` injectée depuis `main.ts`)
 - `public/game.css` + `style.css` – styles ; `style.css` porte le thème actif
   (`tapstorm-theme`) et gagne sur `game.css` là où les deux se croisent
 - `src/main.ts` – point d'entrée : expose les icônes, gère le bouton retour
   Android, puis charge `game.js`
 - `src/icons.ts` – résolution des chemins d'icônes locales
 - `capacitor.config.json` – `appId` `com.devidle.agency`, `webDir` sur `dist`
+- `store/` – visuels et textes de la fiche Play Store (voir `store/README.md`)
+- `tools/equilibrage.mjs` – le simulateur d'économie
+- `../docs/confidentialite.html` – la politique de confidentialité publiée
 
 ## Périmètre de la v1
 
 Certains systèmes sont **présents dans le code mais désactivés** pour la
-première version : les onglets Candidats et Équipe (donc l'arbre de compétences,
-les Cadres et les Formations) et les sections International, Contrats et R&D de
-l'onglet Plus.
+première version : les onglets Candidats et Équipe (donc les Cadres et les
+Formations) et les sections International, Contrats et R&D de l'onglet Plus.
 
 Tout est piloté par un seul bloc en tête de `public/game.js` :
 `V1_LOCKS_ENABLED`, `LOCKED_TABS`, `LOCKED_PLUS_SECTIONS`, `LOCKED_QUEST_IDS`.
 Repasser `V1_LOCKS_ENABLED` à `false` rallume l'ensemble.
+
+L'arbre de compétences, lui, **n'est plus derrière ce verrou** : il a quitté
+l'onglet Équipe, remplace les bonus de montée de niveau et s'ouvre par un
+chapitre. Les onglets qu'un chapitre ouvre apparaissent en cours de partie ; ils
+sont masqués par `hidden`, et `public/game.css` pose explicitement
+`.tapstorm-nav .tab-btn[hidden] { display: none !important }` — dans ce projet,
+`hidden` seul ne suffit presque jamais, plusieurs règles le battent en
+spécificité.
