@@ -2838,22 +2838,39 @@
     return 'garage';
   }
 
-  /** Un poste de travail complet : personnage, écran, bureau. */
-  function sceneDesk(x, y, row, nouveau, delai) {
-    const cls = 'agency-unit' + (nouveau ? ' agency-pop' : '');
-    const style = nouveau ? ' style="animation-delay:' + delai + 'ms"' : '';
-    return '<g class="' + cls + '"' + style + ' transform="translate(' + x + ',' + y + ')">' +
+  /**
+   * Un poste de travail complet : personnage, écran, bureau.
+   *
+   * Trois groupes imbriqués, et ce n'est pas de la décoration. En SVG, une
+   * propriété `transform` en CSS **remplace** l'attribut `transform` — animer
+   * l'arrivée sur le groupe qui porte le `translate(x,y)` faisait donc entrer
+   * le poste depuis le coin haut-gauche avant qu'il ne resurgisse à sa place.
+   * Chaque couche a donc sa transformation à elle :
+   *   .agency-unit   position dans la scène (attribut, jamais animé)
+   *   .agency-desk   entrée en scène à l'achat
+   *   .agency-react  réaction au clic du joueur
+   * et, à l'intérieur, le buste qui pianote et l'écran qui scintille.
+   */
+  function sceneDesk(x, y, row, nouveau, delai, tempo) {
+    const pop = nouveau ? ' agency-pop' : '';
+    const popStyle = nouveau ? ' style="animation-delay:' + delai + 'ms"' : '';
+    return '<g class="agency-unit" transform="translate(' + x + ',' + y + ')">' +
+      '<g class="agency-desk' + pop + '"' + popStyle + '>' +
+      '<g class="agency-react">' +
       // Le personnage est derrière l'écran : la tête dépasse, le buste est masqué
       // par le moniteur, ce qui suffit à donner la profondeur sans perspective.
+      '<g class="agency-typing" style="animation-delay:' + tempo + 'ms">' +
       '<circle cx="15" cy="-27" r="5" fill="' + row.color + '"/>' +
       '<rect x="9" y="-21" width="12" height="11" rx="4.5" fill="' + row.color + '" opacity="0.85"/>' +
+      '</g>' +
       '<rect x="6" y="-17" width="18" height="12" rx="2" fill="#0f0c1c"/>' +
-      '<rect x="7.5" y="-15.5" width="15" height="9" rx="1" fill="' + row.screen + '" opacity="0.9"/>' +
+      '<rect class="agency-screen" style="animation-delay:' + (tempo * 2 % 1700) + 'ms" ' +
+        'x="7.5" y="-15.5" width="15" height="9" rx="1" fill="' + row.screen + '"/>' +
       '<rect x="14" y="-5" width="2" height="2.5" fill="#0f0c1c"/>' +
       '<rect x="2" y="-3" width="26" height="3.5" rx="1.75" fill="#2d2545"/>' +
       '<rect x="4.5" y="0.5" width="2" height="7" rx="1" fill="#221c38"/>' +
       '<rect x="23.5" y="0.5" width="2" height="7" rx="1" fill="#221c38"/>' +
-      '</g>';
+      '</g></g></g>';
   }
 
   /** La pastille qui remplace les postes non dessinés. */
@@ -3042,7 +3059,10 @@
         // regardé. Le décalage fait entrer les postes l'un après l'autre quand
         // on en achète plusieurs d'affilée.
         const nouveau = avant !== null && k >= deja;
-        g += sceneDesk(x0 + k * SCENE_PITCH, y, row, nouveau, (k - deja) * 70);
+        // Tempo propre à chaque poste : sans décalage, toute la pièce pianote
+        // en cadence et la scène a l'air mécanique.
+        const tempo = (i * 313 + k * 137) % 900;
+        g += sceneDesk(x0 + k * SCENE_PITCH, y, row, nouveau, (k - deja) * 70, tempo);
       }
       if (n > SCENE_MAX_SLOTS) {
         g += sceneOverflow(x0 + dessines * SCENE_PITCH, y, n - dessines, row.color);
@@ -4016,6 +4036,34 @@
     renderCredits(loopProd);
   }
 
+  /** Nombre de particules encore à l'écran, pour ne pas en empiler à l'infini. */
+  var clickParticlesEnVol = 0;
+
+  /**
+   * Quelques éclats partent du point de contact. Plafonnés : en tapotant vite on
+   * en créerait des dizaines par seconde, et ce jeu a déjà payé une fois le prix
+   * du DOM créé en boucle.
+   */
+  function showClickParticles(clientX, clientY) {
+    if (clickParticlesEnVol > 18) return;
+    const n = 5;
+    for (let i = 0; i < n; i++) {
+      const p = document.createElement('span');
+      p.className = 'click-particle';
+      // Éventail vers le haut, avec assez d'aléatoire pour que deux clics de
+      // suite ne dessinent pas la même figure.
+      const angle = (-90 + (i - (n - 1) / 2) * 26 + (Math.random() * 16 - 8)) * Math.PI / 180;
+      const dist = 26 + Math.random() * 20;
+      p.style.left = clientX + 'px';
+      p.style.top = clientY + 'px';
+      p.style.setProperty('--dx', Math.cos(angle) * dist + 'px');
+      p.style.setProperty('--dy', Math.sin(angle) * dist + 'px');
+      document.body.appendChild(p);
+      clickParticlesEnVol++;
+      setTimeout(function () { p.remove(); clickParticlesEnVol--; }, 620);
+    }
+  }
+
   function showClickProfitAnimation(clientX, clientY) {
     var amount = Math.max(1, Math.floor(getClickPower()) || 1);
     var el = document.createElement('div');
@@ -4027,13 +4075,43 @@
     requestAnimationFrame(function () {
       el.classList.add('click-profit-popup-visible');
     });
+    showClickParticles(clientX, clientY);
     setTimeout(function () {
       el.remove();
     }, 700);
   }
 
+  /**
+   * Un poste choisi au hasard s'active à chaque clic. C'est le lien qui manquait
+   * entre l'action la plus répétée du jeu et la scène : sans lui, le joueur
+   * clique dans le vide pendant que son agence reste immobile.
+   */
+  function pulseAgencyDesk() {
+    if (!isTabActive('accueil')) return;
+    const postes = document.querySelectorAll('#agency-scene .agency-react');
+    if (!postes.length) return;
+    const el = postes[Math.floor(Math.random() * postes.length)];
+    // Retirer puis relire une propriété de mise en page relance l'animation même
+    // si le même poste est retiré au sort deux fois de suite.
+    el.classList.remove('agency-hit');
+    void el.getBoundingClientRect();
+    el.classList.add('agency-hit');
+    setTimeout(function () { el.classList.remove('agency-hit'); }, 420);
+  }
+
+  /** Le compteur de crédits tressaute quand le clic le fait monter. */
+  function bumpCredits() {
+    const el = document.getElementById('credits');
+    if (!el) return;
+    el.classList.remove('credits-bump');
+    void el.getBoundingClientRect();
+    el.classList.add('credits-bump');
+  }
+
   function onCodeClick(e) {
     addCredits();
+    pulseAgencyDesk();
+    bumpCredits();
     if (e && typeof e.clientX === 'number' && typeof e.clientY === 'number') {
       showClickProfitAnimation(e.clientX, e.clientY);
     } else {

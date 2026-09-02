@@ -1922,7 +1922,11 @@ body.tapstorm-theme #game-screen .tapstorm-nav .tab-btn[hidden] {
 }
 
 /* Un poste qui vient d'être acheté entre en scène. C'est tout l'intérêt de la
-   vue : l'achat doit se voir, pas seulement s'ajouter à un total. */
+   vue : l'achat doit se voir, pas seulement s'ajouter à un total.
+
+   La règle porte sur `.agency-desk`, jamais sur le groupe qui porte le
+   `transform="translate(x,y)"` : en SVG, un `transform` CSS remplace l'attribut
+   de même nom, et le poste partait alors du coin haut-gauche de la scène. */
 .agency-pop {
   transform-box: fill-box;
   transform-origin: bottom center;
@@ -1932,6 +1936,70 @@ body.tapstorm-theme #game-screen .tapstorm-nav .tab-btn[hidden] {
 @keyframes agency-pop {
   0% { opacity: 0; transform: translateY(10px) scale(0.6); }
   100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ----- La vie de la pièce -----
+   Deux animations permanentes et très courtes d'amplitude : le buste qui
+   pianote, l'écran qui scintille. Décalées poste par poste depuis le JS, sinon
+   toute la salle bouge en cadence et l'effet tombe à plat. */
+.agency-typing {
+  transform-box: fill-box;
+  transform-origin: bottom center;
+  animation: agency-typing 1.7s ease-in-out infinite;
+}
+
+@keyframes agency-typing {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(0.9px); }
+}
+
+.agency-screen {
+  animation: agency-screen 2.6s ease-in-out infinite;
+}
+
+@keyframes agency-screen {
+  0%, 100% { opacity: 0.9; }
+  45% { opacity: 0.62; }
+  55% { opacity: 1; }
+}
+
+/* Le poste tiré au sort à chaque clic : il se redresse et son écran s'allume.
+   C'est le lien direct entre le bouton et la scène. */
+.agency-hit {
+  transform-box: fill-box;
+  transform-origin: bottom center;
+  animation: agency-hit 0.42s ease-out;
+}
+
+.agency-hit .agency-screen {
+  fill: #f8fafc;
+  animation: none;
+}
+
+@keyframes agency-hit {
+  0% { transform: translateY(0) scale(1); }
+  35% { transform: translateY(-2.5px) scale(1.09); }
+  100% { transform: translateY(0) scale(1); }
+}
+
+/* Pendant un Eurêka, toute l'agence s'y met : les écrans virent à l'or et le
+   rythme s'emballe. La scène doit participer au moment fort du jeu.
+
+   Le changement des écrans seul ne suffisait pas — ils font 15 × 9 unités, et
+   sur la rangée dorée des seniors il passait complètement inaperçu. C'est le
+   cadre de la scène qui porte l'effet. */
+body.eureka-active #agency-scene {
+  border-color: rgba(251, 191, 36, 0.7);
+  box-shadow: 0 0 26px rgba(251, 191, 36, 0.3), inset 0 0 44px rgba(251, 191, 36, 0.14);
+}
+
+body.eureka-active #agency-scene .agency-screen {
+  fill: #fbbf24;
+  animation-duration: 0.7s;
+}
+
+body.eureka-active #agency-scene .agency-typing {
+  animation-duration: 0.45s;
 }
 
 .agency-led {
@@ -1957,6 +2025,33 @@ body.tapstorm-theme #game-screen .tapstorm-nav .tab-btn[hidden] {
 @media (prefers-reduced-motion: reduce) {
   .agency-led,
   .agency-neon,
+  .agency-typing,
+  .agency-screen,
   .agency-scene { animation: none; }
-  .agency-pop { animation-duration: 0.01ms; }
+  .agency-pop,
+  .agency-hit { animation-duration: 0.01ms; }
+}
+
+/* ===== Éclats au clic =====================================================
+   Le clic est l'action la plus répétée du jeu et n'avait qu'un « +1 » qui
+   monte. Les éclats partent du doigt, dans la couleur du gain. */
+.click-particle {
+  position: fixed;
+  width: 5px;
+  height: 5px;
+  margin: -2.5px 0 0 -2.5px;
+  border-radius: 50%;
+  background: #22c55e;
+  pointer-events: none;
+  z-index: 9998;
+  animation: click-particle 0.6s cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+}
+
+@keyframes click-particle {
+  0% { opacity: 1; transform: translate(0, 0) scale(1); }
+  100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(0.3); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .click-particle { display: none; }
 }

@@ -1068,6 +1068,41 @@ body.tapstorm-theme #game-screen .tapstorm-cta:hover {
 body.tapstorm-theme #game-screen .clicker-section {
   margin-bottom: 8px;
 }
+/* Le bouton s'écrase franchement sous le doigt puis rebondit : c'est le geste
+   que le joueur répète le plus, il doit se sentir. La règle plus haut
+   (`.btn-code:active`) ne descendait qu'à 0.98, ce qui ne se voit pas. */
+body.game-active #game-screen .btn-code:active,
+body.game-active #game-screen .tapstorm-cta:active {
+  transform: scale(0.94);
+  transition: transform 0.06s ease-out;
+}
+
+body.game-active #game-screen .btn-code {
+  transition: transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Le compteur tressaute quand le clic le fait monter — sans ça, la seule
+   preuve que le clic a servi est un nombre qui change de valeur. */
+body.tapstorm-theme #game-screen .header-credits.credits-bump,
+body.game-active #game-screen .credits-bump {
+  /* `.header-credits` est un <span> : sans `inline-block` le `transform` est
+     purement et simplement ignoré, et l'animation ne se voit jamais. */
+  display: inline-block;
+  animation: credits-bump 0.26s ease-out;
+}
+
+@keyframes credits-bump {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+
+body.tapstorm-theme .click-particle { background: #4ade80; }
+
+@media (prefers-reduced-motion: reduce) {
+  body.game-active #game-screen .credits-bump { animation: none; }
+}
+
 body.tapstorm-theme .click-profit-popup {
   color: #4ade80;
   text-shadow: 0 0 10px rgba(74, 222, 128, 0.6), 0 1px 2px rgba(0, 0, 0, 0.4);
