@@ -316,6 +316,15 @@
    * sur la courbe réelle simulée, et les chapitres ne sont plus remis à zéro
    * par le prestige : c'est la progression permanente du joueur.
    *
+   * Recalibrés le 2026-09-02 avec `npm run equilibrage` : les paliers de
+   * producteur et l'arbre de compétences avaient rendu la fin de partie
+   * atteignable en 1 h 30, alors qu'elle vise 6 à 8 h de jeu actif.
+   *
+   * Attention en touchant aux buts `runCredits` : c'est le PIC de crédits
+   * détenus, et `doPrestige()` le remet à zéro. Les chapitres 8 et 10 se
+   * rejouent donc après un Rebranding, ce que le simulateur ne modélise pas —
+   * leurs dates réelles sont plus tardives que ce qu'il annonce.
+   *
    * `goal.kind` :
    *   credits      crédits en poche maintenant
    *   runCredits   meilleur total atteint depuis le dernier Rebranding
@@ -375,7 +384,7 @@
       id: 5,
       name: 'Le garage',
       tagline: 'Deux bureaux, une machine à café, beaucoup d\'espoir.',
-      goal: { kind: 'runCredits', target: 10000, label: 'Atteindre 10 000 crédits' },
+      goal: { kind: 'runCredits', target: 200000, label: 'Avoir 200 000 crédits en caisse' },
       reward: { prodPercent: 10 },
       rewardLabel: '+10% production',
       unlocks: ['bureaux'],
@@ -386,7 +395,7 @@
       id: 6,
       name: 'Petite agence locale',
       tagline: 'On te connaît dans le quartier.',
-      goal: { kind: 'runCredits', target: 100000, label: 'Atteindre 100 000 crédits' },
+      goal: { kind: 'runCredits', target: 1e6, label: 'Avoir 1 M de crédits en caisse' },
       reward: { prodPercent: 10 },
       rewardLabel: '+10% production',
       unlocks: ['branding', 'prestige'],
@@ -408,7 +417,7 @@
       id: 8,
       name: 'Agence reconnue',
       tagline: 'Les clients viennent à toi.',
-      goal: { kind: 'runCredits', target: 1e6, label: 'Atteindre 1 M de crédits sur une partie' },
+      goal: { kind: 'runCredits', target: 5e6, label: 'Avoir 5 M de crédits en caisse sur une partie' },
       reward: { prodPercent: 15 },
       rewardLabel: '+15% production',
       unlocks: ['campus'],
@@ -429,7 +438,7 @@
       id: 10,
       name: 'Studio légendaire',
       tagline: 'On raconte ton agence dans les écoles.',
-      goal: { kind: 'totalCredits', target: 1e8, label: 'Gagner 100 M de crédits en tout' },
+      goal: { kind: 'totalCredits', target: 2e9, label: 'Gagner 2 milliards de crédits en tout' },
       reward: { prodPercent: 25 },
       rewardLabel: '+25% production',
       unlocks: [],

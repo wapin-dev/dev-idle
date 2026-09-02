@@ -251,13 +251,20 @@ const check = (nom, attendu, obtenu) => {
 // 15. L'escalier de chapitres monte et s'arrête sur le dernier
 {
   const { t } = boot(undefined);
-  t.state.credits = 1e9;
-  t.state.totalCreditsEarned = 1e9;
-  t.state.runPeakCredits = 1e9;
-  t.state.prestigeCount = 5;
-  t.state.internsHired = 1;
-  t.state.upgrades.find(u => u.id === 'stagiaire').quantity = 20;
-  t.state.upgrades.find(u => u.id === 'devSenior').quantity = 50;
+  // Les valeurs sont DÉRIVÉES des chapitres, pas écrites en dur : ce test
+  // tombait à chaque fois qu'un seuil bougeait, ce qui n'apprenait rien sur
+  // l'escalier lui-même. On se place juste au-dessus du but le plus exigeant
+  // de chaque type.
+  const cible = (kind) => Math.max(0, ...t.CHAPTERS
+    .filter(c => c.goal.kind === kind).map(c => c.goal.target)) * 2 + 10;
+  t.state.credits = cible('credits');
+  t.state.runPeakCredits = cible('runCredits');
+  t.state.totalCreditsEarned = cible('totalCredits');
+  t.state.prestigeCount = cible('prestiges');
+  t.state.internsHired = cible('internsHired');
+  t.state.playerLevel = cible('level');
+  t.state.upgrades.find(u => u.id === 'stagiaire').quantity = cible('upgradeQty');
+  t.state.upgrades.find(u => u.id === 'devSenior').quantity = cible('upgradeQty');
   t.catchUpChapters();
   check('escalier : tous les chapitres franchis', t.CHAPTERS.length,
     t.state.completedChapters.length);
@@ -624,6 +631,33 @@ function bootAvecPromo() {
     return occurrences <= declarations + 1;
   });
   check('arbre : aucun effet déclaré sans être lu', [], orphelins);
+}
+
+// 37. L'escalier doit monter, et la fin doit rester loin
+{
+  const { t } = boot(undefined);
+  // Un but de crédits qui redescend d'un chapitre au suivant rend le second
+  // gratuit : le joueur franchit deux chapitres d'un coup et l'escalier ment.
+  const parKind = {};
+  t.CHAPTERS.forEach(c => {
+    const k = c.goal.kind;
+    if (!['credits', 'runCredits', 'totalCredits', 'prodPerSec', 'prestiges'].includes(k)) return;
+    (parKind[k] = parKind[k] || []).push({ id: c.id, cible: c.goal.target });
+  });
+  const inversions = [];
+  Object.entries(parKind).forEach(([k, liste]) => {
+    for (let i = 1; i < liste.length; i++) {
+      if (liste[i].cible <= liste[i - 1].cible) inversions.push(k + ' ch' + liste[i].id);
+    }
+  });
+  check('chapitres : les buts d\'un même type montent', [], inversions);
+
+  // Le dernier chapitre a été calibré avant les paliers de producteur et
+  // l'arbre : il tombait à 1 h 30 de jeu au lieu des 6 à 8 h visées. Le garde
+  // ci-dessous ne vaut que comme alerte grossière — la vraie mesure est
+  // `npm run equilibrage`.
+  const dernier = t.CHAPTERS[t.CHAPTERS.length - 1];
+  check('chapitres : le dernier but reste lointain', true, dernier.goal.target >= 1e9);
 }
 
 const echecs = results.filter(r => !r.ok);

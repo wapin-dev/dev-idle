@@ -61,6 +61,16 @@ const sv = src.match(/\{ id: 'serveur'.*?basePrice: ([\d.]+), priceGrowth: ([\d.
 const SRV = { base: +sv[1], growth: +sv[2], mult: +sv[3] };
 const prix = (d, q) => Math.ceil(d.base * Math.pow(d.growth, q));
 
+/** Les buts de chapitre, tels que getChapterProgress() les évalue. */
+const BUTS = {
+  'ch3  prod 10/s':        e => e.perSec >= 10,
+  'ch4  1 embauche':       e => e.embauches >= 1,
+  'ch5  pic 200 K':        e => e.pic >= 2e5,
+  'ch6  pic 1 M':          e => e.pic >= 1e6,
+  'ch8  pic 5 M':          e => e.pic >= 5e6,
+  'ch10 cumul 2 G':        e => e.total >= 2e9,
+};
+
 /** Additionne les effets d'une liste de compétences, comme getSkillEffects(). */
 function effets(ids) {
   const e = {};
@@ -134,7 +144,13 @@ function simuler(ids, { minutes = 180, clicsParSec = 2, clicsToutDuLong = false,
   const st = bonusStagiaire(sk);
 
   const q = { stagiaire: 0, dev: 0, devSenior: 0, serveur: 0 };
-  let credits = depart, total = 0, embauches = 0, prochaineEmbauche = st.cycleMin, perSecFinal = 0;
+  let credits = depart, total = 0, embauches = 0, prochaineEmbauche = st.cycleMin, perSecFinal = 0, pic = 0;
+  const dates = {};
+  const jalonner = (t, e) => {
+    for (const [nom, atteint] of Object.entries(BUTS)) {
+      if (dates[nom] === undefined && atteint(e)) dates[nom] = t / 60;
+    }
+  };
   const DT = 0.1;
   const finClics = 10 * 60;
 
@@ -149,6 +165,8 @@ function simuler(ids, { minutes = 180, clicsParSec = 2, clicsToutDuLong = false,
 
     perSecFinal = perSec;
     credits += perSec * DT; total += perSec * DT;
+    if (credits > pic) pic = credits;
+    jalonner(t, { total, pic, perSec, embauches, q });
     // Salves de 20 s toutes les 100 s : personne ne tape 21 600 fois d'affilée.
     const enSalve = clicsToutDuLong ? (t % 100) < 20 : t < finClics;
     if (enSalve) {
@@ -167,8 +185,11 @@ function simuler(ids, { minutes = 180, clicsParSec = 2, clicsToutDuLong = false,
     // jamais, et la voie Stagiaires mesure zéro — aussi faux que de supposer
     // les embauches gratuites, ce que faisait la version précédente.
     const coutEmbauche = perSec * HIRE_SECONDS * 1.6 * (1 + sk.internHirePercent / 100);
+    // Le joueur épargne pendant tout le stage : il voit le compte à rebours dès
+    // qu'il choisit son candidat. Réserver seulement la dernière minute rendait
+    // l'embauche impossible — elle coûte plus de 2 min de production.
     const minutesAvant = prochaineEmbauche - t / 60;
-    const reserve = minutesAvant <= 1 ? coutEmbauche : 0;
+    const reserve = minutesAvant <= STAGE_MS / 60000 ? coutEmbauche : 0;
 
     for (let g = 0; g < 40; g++) {
       // Recalculée à chaque achat : la réserve doit rester intacte, sans pour
@@ -188,7 +209,7 @@ function simuler(ids, { minutes = 180, clicsParSec = 2, clicsToutDuLong = false,
       credits -= prix(best, q[best.id]); q[best.id]++;
     }
   }
-  return { total, embauches, perSecFinal };
+  return { total, embauches, perSecFinal, dates, pic };
 }
 
 /** Prend les nœuds d'une voie dans l'ordre des étages, tant que le budget suit. */
@@ -252,4 +273,33 @@ console.log('\n════ embauches réalisées en 3 h ' + '═'.repeat(30));
 for (const [nom, ids] of [['sans arbre', []], ['voie Stagiaires', voie('intern', 24)]]) {
   const r = simuler(ids, { clicsToutDuLong: false });
   console.log('  ' + nom.padEnd(18) + r.embauches + ' embauches');
+}
+
+// --- Quand chaque but de chapitre tombe-t-il ? ---
+console.log('\n════ dates des buts de chapitre ' + '═'.repeat(30));
+console.log('    (joueur passif, 6 h, arbre réparti : 3 nœuds par voie)');
+const arbreReparti = ['p1','p2','p3','c1','c2','c3','s1','s2','s3','m1','m2','m3'];
+for (const [nom, ids] of [['sans arbre', []], ['arbre réparti', arbreReparti]]) {
+  const r = simuler(ids, { minutes: 360, clicsToutDuLong: false });
+  console.log('  ' + nom + ' :');
+  Object.keys(BUTS).forEach(b => {
+    const d = r.dates[b];
+    console.log('    ' + b.padEnd(20) + (d === undefined ? 'JAMAIS en 6 h' :
+      d < 60 ? d.toFixed(1) + ' min' : (d / 60).toFixed(1) + ' h'));
+  });
+  console.log('    pic de crédits atteint : ' + fmt(r.pic));
+}
+
+// --- Courbe : où en est-on à un instant donné ? ---
+console.log('\n════ courbe de progression (arbre réparti) ' + '═'.repeat(20));
+console.log('    temps     cumul gagné    pic détenu    prod/s');
+{
+  const jalons = [5, 10, 20, 35, 50, 90, 120, 180, 240, 360, 480];
+  const arbre = ['p1','p2','p3','c1','c2','c3','s1','s2','s3','m1','m2','m3'];
+  jalons.forEach(min => {
+    const r = simuler(arbre, { minutes: min, clicsToutDuLong: false });
+    const t = min < 60 ? min + ' min' : (min / 60) + ' h';
+    console.log('    ' + t.padEnd(9) + fmt(r.total).padStart(11) + fmt(r.pic).padStart(14) +
+      fmt(r.perSecFinal).padStart(10));
+  });
 }
