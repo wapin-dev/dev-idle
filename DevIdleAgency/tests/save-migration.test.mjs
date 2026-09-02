@@ -52,7 +52,8 @@ function instrument(version) {
     "    buyUpgrade, getUpgradeState, ensureUpgrade,\n" +
     "    SKILL_TREE, SKILL_BRANCHES, skillCost, canUnlockSkill, unlockSkill,\n" +
     "    isSkillUnlocked, getSkillEffects, getClickPower, addXP, getXpToNextLevel,\n" +
-    "    doPrestige, checkLevelUp };\n})();");
+    "    doPrestige, checkLevelUp, EVENTS, startEvent, endEvent, onEventAction,\n" +
+    "    eventActionCost, EVENT_MIN_INTERVAL_MS, EVENT_MAX_INTERVAL_MS };\n})();");
 }
 
 function boot(seed, { migrations = null, version = undefined } = {}) {
@@ -542,6 +543,69 @@ function bootAvecPromo() {
   check('v3 -> v4 : niveaux convertis en points', 18, r.data.skillPoints);
   check('v3 -> v4 : anciens bonus effacés', {}, r.data.levelBonuses);
   check('v3 -> v4 : plus rien en attente', false, r.data.pendingLevelUp);
+}
+
+// 33. Un événement ne doit jamais modifier sa propre définition
+{
+  const { t } = boot(undefined);
+  t.ensureUpgrade('stagiaire');
+  t.getUpgradeState('stagiaire').quantity = 40;
+  t.state.credits = 1e7;
+  const definition = t.EVENTS.bugCritique.productionMultiplier;
+
+  t.startEvent('bugCritique');
+  // L'invariant, et pas seulement son symptôme : `state.activeEvent` ne doit
+  // jamais ÊTRE l'objet de EVENTS. Il l'était, et `onEventAction` le modifiait —
+  // un seul Hotfix rendait tous les bugs critiques suivants inoffensifs. Vérifier
+  // « la définition n'a pas changé » ne protège que du bug d'hier ; vérifier la
+  // non-identité protège aussi de celui que le prochain écrira.
+  check('événement : l\'état ne partage pas l\'objet de définition', false,
+    t.state.activeEvent === t.EVENTS.bugCritique);
+  t.onEventAction();
+  check('événement : la définition reste intacte', definition,
+    t.EVENTS.bugCritique.productionMultiplier);
+
+  t.state.activeEvent = null;
+  t.state.eventActionUsed = false;
+  t.startEvent('bugCritique');
+  check('événement : le malus revient au suivant', definition,
+    t.state.activeEvent.productionMultiplier);
+}
+
+// 34. Payer met fin à l'événement, et coûte vraiment
+{
+  const { t } = boot(undefined);
+  t.ensureUpgrade('stagiaire');
+  t.getUpgradeState('stagiaire').quantity = 40;
+  t.state.credits = 1e7;
+  t.startEvent('clientToxique');
+  const cout = t.eventActionCost();
+  check('événement : le règlement a un prix', true, cout > 0);
+  const avant = t.state.credits;
+  t.onEventAction();
+  check('événement : crédits débités', true, Math.abs((avant - t.state.credits) - cout) < 1);
+  check('événement : terminé', null, t.state.activeEvent);
+
+  // Sans les crédits, rien ne se passe : le bouton ne doit pas être un piège.
+  t.state.credits = 1;
+  t.state.eventActionUsed = false;
+  t.startEvent('clientToxique');
+  t.onEventAction();
+  check('événement : sans crédits, il continue', true, !!t.state.activeEvent);
+  check('événement : sans crédits, rien n\'est débité', 1, t.state.credits);
+}
+
+// 35. Les événements laissent respirer
+{
+  const { t } = boot(undefined);
+  // Ils tombaient toutes les 1 à 3 min — plus souvent que tout le reste du jeu,
+  // promos de stagiaires comprises une fois celles-ci espacées à 6 min.
+  check('événements : au moins 4 min entre deux', true, t.EVENT_MIN_INTERVAL_MS >= 4 * 60 * 1000);
+  // En moyenne, pas au minimum : c'est la cadence ressentie qui compte, et elle
+  // ne doit pas être plus soutenue que celle des promos de stagiaires.
+  const moyenneEvent = (t.EVENT_MIN_INTERVAL_MS + t.EVENT_MAX_INTERVAL_MS) / 2;
+  check('événements : pas plus fréquents que les promos', true,
+    moyenneEvent >= t.INTERN_STAGE_MS + t.INTERN_COOLDOWN_MS);
 }
 
 const echecs = results.filter(r => !r.ok);

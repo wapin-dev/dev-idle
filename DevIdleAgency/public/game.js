@@ -130,8 +130,14 @@
   // seconde, la logique périodique (quêtes, chapitres, tirages) 2 fois par seconde.
   const UI_REFRESH_MS = 250;
   const LOGIC_REFRESH_MS = 500;
-  const EVENT_MIN_INTERVAL_MS = 60 * 1000;
-  const EVENT_MAX_INTERVAL_MS = 3 * 60 * 1000;
+  /**
+   * Un événement toutes les 1 à 3 min, c'était plus fréquent que tout le reste
+   * du jeu — promos de stagiaires comprises, une fois celles-ci espacées à
+   * 6 min. Un idle se joue par coups d'œil : un événement doit être un moment,
+   * pas un métronome.
+   */
+  const EVENT_MIN_INTERVAL_MS = 4 * 60 * 1000;
+  const EVENT_MAX_INTERVAL_MS = 8 * 60 * 1000;
   const XP_PER_CLICK = 1;
   const XP_PER_CREDIT = 0.001;
   const PRESTIGE_THRESHOLD = 100000;
@@ -447,6 +453,10 @@
       duration: 30 * 1000,
       productionMultiplier: 0.5,
       type: 'bad',
+      // Un malus subi sans rien pouvoir faire n'est pas du jeu, c'est une
+      // attente. Le prix est en secondes de production : il suit la partie,
+      // au lieu de devenir dérisoire au bout d'une heure.
+      action: { label: 'Apaiser', costSeconds: 45 },
     },
     hackathon: {
       id: 'hackathon',
@@ -461,8 +471,7 @@
       duration: 30 * 1000,
       productionMultiplier: 0.5,
       type: 'bad',
-      hasAction: true,
-      actionRecovery: 0.5,
+      action: { label: 'Hotfix', costSeconds: 30 },
     },
     clientVIP: {
       id: 'clientVIP',
@@ -1336,8 +1345,13 @@
     if (!gagnes) return;
     state.pendingLevelUp = false;
     renderSkillBadge();
+    // Au premier point, on dit où aller : la pastille seule ne suffit pas à
+    // faire comprendre qu'on peut la toucher.
+    const premier = (state.skills || []).length === 0 && (state.skillPoints || 0) <= gagnes;
     showToast('Niveau ' + state.playerLevel + ' — ' +
-      (gagnes > 1 ? gagnes + ' points de compétence' : '1 point de compétence') + ' à dépenser.', 3200);
+      (gagnes > 1 ? gagnes + ' points de compétence' : '1 point de compétence') +
+      (premier ? ' ! Touche ton niveau, en haut, pour ouvrir l\'arbre.' : ' à dépenser.'),
+      premier ? 5200 : 3200);
     save();
   }
 
@@ -2036,8 +2050,12 @@
   }
 
   function startEvent(eventId) {
-    const ev = EVENTS[eventId];
-    if (!ev || state.activeEvent) return;
+    const def = EVENTS[eventId];
+    if (!def || state.activeEvent) return;
+    // Copie, pas référence : `onEventAction` modifiait auparavant l'objet de
+    // EVENTS lui-même. Un seul Hotfix rendait donc tous les bugs critiques de
+    // la session inoffensifs — le malus ne revenait jamais.
+    const ev = Object.assign({}, def);
     state.activeEvent = ev;
     state.eventEndsAt = Date.now() + ev.duration;
     state.eventActionUsed = false;
@@ -2048,20 +2066,50 @@
     if (banner && textEl) {
       banner.hidden = false;
       banner.setAttribute('data-type', ev.type);
-      textEl.textContent = ev.name + (ev.hasAction ? ' — Clique Hotfix pour limiter les dégâts !' : ' !');
+      textEl.textContent = ev.name + ' !';
       if (timerEl) timerEl.textContent = formatDuration(ev.duration / 1000);
-      if (actionBtn) {
-        actionBtn.hidden = !ev.hasAction;
-      }
+      renderEventAction();
     }
   }
 
+  /** Le prix pour couper court, en crédits : il vaut N secondes de production. */
+  function eventActionCost() {
+    const ev = state.activeEvent;
+    if (!ev || !ev.action) return 0;
+    // Sur la production nominale, pas sur celle amputée par l'événement en
+    // cours : sinon plus le malus est fort, moins il coûte cher de l'annuler.
+    const perSec = getProductionPerSecond() / (ev.productionMultiplier || 1);
+    return Math.max(50, Math.floor(perSec * ev.action.costSeconds));
+  }
+
+  /** Le bouton n'apparaît que si l'événement se règle, et affiche son prix. */
+  function renderEventAction() {
+    const btn = document.getElementById('event-action-btn');
+    const ev = state.activeEvent;
+    if (!btn) return;
+    if (!ev || !ev.action || state.eventActionUsed) { btn.hidden = true; return; }
+    const cout = eventActionCost();
+    btn.hidden = false;
+    btn.textContent = ev.action.label + ' · ' + formatNumber(cout);
+    btn.disabled = !canAfford(cout);
+    btn.classList.toggle('too-expensive', !canAfford(cout));
+  }
+
+  /**
+   * Payer met fin à l'événement sur-le-champ. C'est le choix : encaisser le
+   * malus jusqu'au bout, ou en racheter la fin.
+   */
   function onEventAction() {
-    if (!state.activeEvent || !state.activeEvent.hasAction || state.eventActionUsed) return;
+    const ev = state.activeEvent;
+    if (!ev || !ev.action || state.eventActionUsed) return;
+    const cout = eventActionCost();
+    if (!canAfford(cout)) return;
+    state.credits -= cout;
     state.eventActionUsed = true;
-    state.activeEvent.productionMultiplier = 0.5 + (state.activeEvent.actionRecovery || 0.5);
-    const actionBtn = document.getElementById('event-action-btn');
-    if (actionBtn) actionBtn.hidden = true;
+    const nom = ev.name;
+    endEvent();
+    renderCredits();
+    showToast(nom + ' réglé pour ' + formatNumber(cout) + ' crédits.', 3000);
   }
 
   function endEvent() {
@@ -2421,7 +2469,9 @@
       if (typeof data.bestRunCredits === 'number') state.bestRunCredits = data.bestRunCredits;
       if (typeof data.nextEventAt === 'number') state.nextEventAt = data.nextEventAt;
       if (data.activeEvent && EVENTS[data.activeEvent]) {
-        state.activeEvent = EVENTS[data.activeEvent];
+        // Copie, comme dans startEvent : l'objet de EVENTS ne doit jamais être
+        // celui que porte l'état, sinon une action le modifie pour la session.
+        state.activeEvent = Object.assign({}, EVENTS[data.activeEvent]);
         state.eventEndsAt = data.eventEndsAt || Date.now() + state.activeEvent.duration;
       }
       if (Array.isArray(data.recruitmentContracts)) state.recruitmentContracts = data.recruitmentContracts;
@@ -2946,6 +2996,7 @@
 
   function renderEventTimer() {
     if (!state.activeEvent || !state.eventEndsAt) return;
+    renderEventAction();
     const left = Math.max(0, (state.eventEndsAt - Date.now()) / 1000);
     const timerEl = document.getElementById('event-timer');
     if (timerEl) {
@@ -3432,6 +3483,9 @@
     const badge = document.getElementById('skill-badge');
     if (!badge) return;
     const pts = state.skillPoints || 0;
+    // La pastille n'apparaît que s'il y a quelque chose à prendre *maintenant* :
+    // afficher « 3 pt » alors que le prochain nœud en coûte 5 enverrait le
+    // joueur ouvrir l'arbre pour rien. Le bouton, lui, reste toujours là.
     const montrer = pts > 0 && hasSpendableSkill();
     badge.hidden = !montrer;
     if (montrer) setText('skill-badge-count', pts);
@@ -4318,6 +4372,11 @@
         renderIntern();
       }
       document.body.classList.toggle('eureka-active', isEurekaActive());
+      // La scène doit dire ce qui se passe : un hackathon fait chauffer la
+      // salle, un client toxique l'éteint. Sans ça l'événement n'est qu'une
+      // bannière de texte au-dessus d'une pièce indifférente.
+      document.body.setAttribute('data-event',
+        state.activeEvent ? state.activeEvent.type : 'none');
       updateUpgradesAffordability();
       if (isTabActive('plus')) {
         updateContratsUI();
@@ -4541,13 +4600,12 @@
       const banner = document.getElementById('event-banner');
       const textEl = document.getElementById('event-text');
       const timerEl = document.getElementById('event-timer');
-      const actionBtn = document.getElementById('event-action-btn');
       if (banner && textEl) {
         banner.hidden = false;
         banner.setAttribute('data-type', ev.type);
-        textEl.textContent = ev.name + (ev.hasAction ? ' — Clique Hotfix !' : ' !');
+        textEl.textContent = ev.name + ' !';
         if (timerEl) timerEl.textContent = formatDuration((state.eventEndsAt - Date.now()) / 1000);
-        if (actionBtn) actionBtn.hidden = !ev.hasAction;
+        renderEventAction();
       }
     }
 
@@ -4580,7 +4638,11 @@
     });
     document.getElementById('chapter-complete-ok')?.addEventListener('click', completeChapterAndContinue);
     document.getElementById('game-complete-ok')?.addEventListener('click', hideGameCompleteModal);
-    document.getElementById('skill-badge')?.addEventListener('click', openSkillModal);
+    // C'est le niveau tout entier qui ouvre l'arbre, pas seulement la pastille :
+    // celle-ci disparaît dès qu'il n'y a plus rien à dépenser, et l'arbre
+    // devenait alors inatteignable — or on doit pouvoir le consulter à tout
+    // moment, ne serait-ce que pour savoir vers quoi on épargne.
+    document.getElementById('header-level')?.addEventListener('click', openSkillModal);
     document.getElementById('skill-modal-close')?.addEventListener('click', closeSkillModal);
     document.getElementById('skill-modal')?.addEventListener('click', function (e) {
       if (e.target === this) closeSkillModal();

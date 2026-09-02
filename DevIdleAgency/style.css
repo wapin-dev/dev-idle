@@ -993,6 +993,17 @@ body.tapstorm-theme #game-screen .header-row-stats {
 body.tapstorm-theme #game-screen .header-level {
   color: rgba(255, 255, 255, 0.9);
   font-weight: 600;
+  /* C'est un <button> depuis qu'il ouvre l'arbre : sans ces remises à zéro il
+     hérite du fond, du cadre et de la police des boutons du navigateur. */
+  appearance: none;
+  border: none;
+  background: none;
+  font-family: inherit;
+  padding: 2px 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 body.tapstorm-theme #game-screen .header-chapter {
   background: rgba(139, 92, 246, 0.35);

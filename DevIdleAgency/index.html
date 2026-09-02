@@ -46,8 +46,7 @@
           </div>
         </div>
         <div class="header-row header-row-stats">
-          <span class="header-level">Niv. <span id="level">1</span></span>
-          <button type="button" id="skill-badge" class="skill-badge" hidden aria-label="Points de compétence à dépenser"><span id="skill-badge-count">0</span> pt</button>
+          <button type="button" id="header-level" class="header-level" aria-label="Ouvrir l'arbre de compétences">Niv. <span id="level">1</span><span id="skill-badge" class="skill-badge" hidden><span id="skill-badge-count">0</span> pt</span></button>
           <span class="header-chapter" id="chapter-badge">Chapitre 1</span>
           <span class="header-profit">Profit/h <span id="income" class="header-profit-value">0</span></span>
         </div>
@@ -61,6 +60,11 @@
         <!-- Onglet Accueil : clicker + objectifs -->
         <section class="tab-panel tapstorm-panel" id="tab-accueil">
           <section class="agency-scene" id="agency-scene" aria-label="Vue de ton agence"></section>
+          <section class="event-banner" id="event-banner" aria-live="polite" hidden>
+            <span id="event-text"></span>
+            <span id="event-timer"></span>
+            <button type="button" id="event-action-btn" class="event-action-btn" hidden>Hotfix</button>
+          </section>
           <section class="chapter-goal" id="chapter-goal" data-complete="false" aria-live="polite">
             <div class="chapter-goal-head">
               <span class="chapter-goal-step" id="chapter-goal-step">Chapitre 1/9</span>
@@ -79,11 +83,6 @@
               <span class="btn-code-text">Coder une feature</span>
               <span id="click-value" class="click-value">+1</span>
             </button>
-          </section>
-          <section class="event-banner" id="event-banner" aria-live="polite" hidden>
-            <span id="event-text"></span>
-            <span id="event-timer"></span>
-            <button type="button" id="event-action-btn" class="event-action-btn" hidden>Hotfix</button>
           </section>
           <section class="quests-section" id="quests-section">
             <h2 class="panel-title">Objectifs</h2>

@@ -2224,3 +2224,49 @@ body.eureka-active #agency-scene .agency-typing {
 @media (prefers-reduced-motion: reduce) {
   .skill-badge { animation: none; }
 }
+
+/* ===== La scène réagit aux événements =====================================
+   Le type de l'événement en cours est posé sur <body> par la boucle. */
+body[data-event="good"] #agency-scene {
+  border-color: rgba(74, 222, 128, 0.55);
+  box-shadow: 0 0 22px rgba(74, 222, 128, 0.22);
+}
+
+body[data-event="good"] #agency-scene .agency-screen {
+  fill: #4ade80;
+  animation-duration: 0.9s;
+}
+
+/* Pendant un hackathon toute la salle s'active : c'est le seul moment où le
+   pianotage doit se voir de loin. */
+body[data-event="good"] #agency-scene .agency-typing {
+  animation-duration: 0.5s;
+}
+
+body[data-event="bad"] #agency-scene {
+  border-color: rgba(248, 113, 113, 0.45);
+}
+
+body[data-event="bad"] #agency-scene .agency-svg {
+  filter: saturate(0.45) brightness(0.8);
+}
+
+/* La salle ralentit au lieu de s'arrêter : figée, on croirait un bug. */
+body[data-event="bad"] #agency-scene .agency-typing {
+  animation-duration: 3.4s;
+}
+
+body[data-event="bad"] #agency-scene .agency-screen {
+  animation-duration: 4s;
+}
+
+/* L'Eurêka passe devant l'événement : c'est le moment fort du jeu, et les deux
+   peuvent tourner en même temps. */
+body.eureka-active[data-event] #agency-scene .agency-svg { filter: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  body[data-event="good"] #agency-scene .agency-typing,
+  body[data-event="bad"] #agency-scene .agency-typing,
+  body[data-event="good"] #agency-scene .agency-screen,
+  body[data-event="bad"] #agency-scene .agency-screen { animation: none; }
+}
