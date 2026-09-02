@@ -1942,25 +1942,30 @@ body.tapstorm-theme #game-screen .tapstorm-nav .tab-btn[hidden] {
    Deux animations permanentes et très courtes d'amplitude : le buste qui
    pianote, l'écran qui scintille. Décalées poste par poste depuis le JS, sinon
    toute la salle bouge en cadence et l'effet tombe à plat. */
+/* Amplitudes mesurées à l'écran, pas choisies à vue : le SVG est affiché à
+   ~0,86 fois sa taille de dessin, donc un déplacement de 0,9 unité tombait à
+   0,78 px CSS — du sous-pixel, invisible. 2,6 unités donnent ~2,2 px, ce qui se
+   voit sans que la salle ait l'air de gigoter. */
 .agency-typing {
   transform-box: fill-box;
   transform-origin: bottom center;
-  animation: agency-typing 1.7s ease-in-out infinite;
+  animation: agency-typing 1.25s ease-in-out infinite;
 }
 
 @keyframes agency-typing {
   0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(0.9px); }
+  50% { transform: translateY(2.6px); }
 }
 
 .agency-screen {
-  animation: agency-screen 2.6s ease-in-out infinite;
+  animation: agency-screen 2.2s ease-in-out infinite;
 }
 
 @keyframes agency-screen {
-  0%, 100% { opacity: 0.9; }
-  45% { opacity: 0.62; }
-  55% { opacity: 1; }
+  0%, 100% { opacity: 1; }
+  40% { opacity: 0.45; }
+  55% { opacity: 0.95; }
+  70% { opacity: 0.6; }
 }
 
 /* Le poste tiré au sort à chaque clic : il se redresse et son écran s'allume.
