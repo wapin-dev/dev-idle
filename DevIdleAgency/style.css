@@ -989,6 +989,26 @@ body.tapstorm-theme #game-screen .header-credits {
 }
 body.tapstorm-theme #game-screen .header-row-stats {
   font-size: 0.85rem;
+  /* Sur un écran de 360 px, très courant, la ligne se cassait : la pastille de
+     points devenait un rond avec « 4 » au-dessus de « pt », et le badge de
+     chapitre passait sur deux lignes. */
+  flex-wrap: nowrap;
+  gap: 8px;
+  min-width: 0;
+}
+body.tapstorm-theme #game-screen .header-row-stats > * {
+  white-space: nowrap;
+  min-width: 0;
+}
+body.tapstorm-theme #game-screen .header-chapter {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (max-width: 380px) {
+  body.tapstorm-theme #game-screen .header-row-stats { font-size: 0.78rem; gap: 6px; }
+  /* Serrer le badge plutôt que le tronquer : « Chapitre 8/10 » tenait à trois
+     pixels près, et l'ellipse coûtait plus de place qu'elle n'en gagnait. */
+  body.tapstorm-theme #game-screen .header-chapter { padding-left: 7px; padding-right: 7px; }
 }
 body.tapstorm-theme #game-screen .header-level {
   color: rgba(255, 255, 255, 0.9);

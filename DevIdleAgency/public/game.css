@@ -2094,6 +2094,8 @@ body.eureka-active #agency-scene .agency-typing {
    Une colonne par voie, les nœuds rangés par étage. La couleur de la branche
    passe par --branche, posée en style inline au rendu. */
 .skill-badge {
+  white-space: nowrap;
+  flex: none;
   border: 1px solid rgba(251, 191, 36, 0.6);
   background: rgba(251, 191, 36, 0.16);
   color: #fbbf24;
