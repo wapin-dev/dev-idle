@@ -666,6 +666,7 @@
     invalidateSkillEffects();
     save();
     renderSkillTreeModal();
+    renderSkillCard();
     renderAll();
     showToast(def.name + ' débloqué.', 2600);
     return true;
@@ -1362,6 +1363,7 @@
     if (!gagnes) return;
     state.pendingLevelUp = false;
     renderSkillBadge();
+    renderSkillCard();
     // Au premier point, on dit où aller : la pastille seule ne suffit pas à
     // faire comprendre qu'on peut la toucher.
     const premier = (state.skills || []).length === 0 && (state.skillPoints || 0) <= gagnes;
@@ -1559,8 +1561,9 @@
     // Un palier franchi est un vrai moment : il double la production de ce
     // producteur. Sans annonce, le joueur voit juste un chiffre bouger.
     if (def.type === 'producer' && producerMilestoneLevel(us.quantity) > paliersAvant) {
-      showToast(us.quantity + ' ' + def.name.toLowerCase() + 's — palier atteint, leur production passe à ×' +
-        producerMilestoneLabel(producerMilestoneMult(us.quantity)) + '.', 4000);
+      showToast('Palier ! ' + us.quantity + ' ' + def.name.toLowerCase() +
+        's, leur production double — ×' +
+        producerMilestoneLabel(producerMilestoneMult(us.quantity)) + ' au total.', 4500);
     }
     addXP(price * XP_PER_CREDIT);
     renderUpgrades();
@@ -3526,6 +3529,48 @@
     if (montrer) setText('skill-badge-count', pts);
   }
 
+  /**
+   * La carte de l'accueil. Deux tentatives ont échoué avant elle : une pastille
+   * dans l'en-tête (invisible dès qu'il n'y a rien à dépenser), puis le niveau
+   * rendu cliquable (rien n'indiquait qu'on pouvait appuyer dessus). Le joueur
+   * demandait encore « où est l'arbre ? ». Il lui faut un endroit, nommé, qui
+   * se voit — comme la carte du stagiaire à côté.
+   */
+  function renderSkillCard() {
+    const card = document.getElementById('skill-card');
+    if (!card) return;
+    const pts = state.skillPoints || 0;
+    const pris = (state.skills || []).length;
+    // Avant le premier point, la carte n'a rien à dire : elle apparaît au
+    // niveau 2, en même temps que le tout premier point.
+    if (!pts && !pris) { card.hidden = true; return; }
+    card.hidden = false;
+
+    const dispo = hasSpendableSkill();
+    card.setAttribute('data-dispo', dispo ? 'true' : 'false');
+    const sig = pts + '|' + pris + '|' + dispo;
+    if (rendered.skillCardSig === sig) return;
+    rendered.skillCardSig = sig;
+
+    card.innerHTML =
+      '<span class="skill-card-head">' +
+        '<span class="skill-card-title">Compétences</span>' +
+        '<span class="skill-card-points">' +
+          (dispo ? pts + (pts > 1 ? ' points à dépenser' : ' point à dépenser')
+                 : pris + '/' + SKILL_TREE.length + ' débloquées') +
+        '</span>' +
+      '</span>' +
+      '<span class="skill-card-branches">' +
+        SKILL_BRANCHES.map(function (br) {
+          const total = SKILL_TREE.filter((n) => n.branch === br.id).length;
+          const n = (state.skills || []).filter((id) => getSkillDef(id).branch === br.id).length;
+          return '<span class="skill-card-branch" style="--branche:' + br.color + '">' +
+            escapeHtml(br.name) + ' <b>' + n + '/' + total + '</b></span>';
+        }).join('') +
+      '</span>' +
+      '<span class="skill-card-cta">' + (dispo ? 'Dépenser mes points' : 'Voir l\'arbre') + '</span>';
+  }
+
   function openSkillModal() {
     renderSkillTreeModal();
     const modal = document.getElementById('skill-modal');
@@ -3827,7 +3872,7 @@
         // compris — sinon le chiffre de la carte contredit celui du bandeau.
         const mult = producerMilestoneMult(quantity);
         desc += ' (' + formatNumber(def.production * mult) + '/s chacun' +
-          (mult > 1 ? ', palier ×' + producerMilestoneLabel(mult) : '') + ')';
+          (mult > 1 ? ' — ' + producerMilestoneLabel(mult) + '× grâce aux paliers' : '') + ')';
       }
       if (def.type === 'multiplier') desc += ' (+' + ((def.multiplier || 0) * 100) + '% par unité)';
       html += '<span class="name">' + escapeHtml(def.name) + '</span><span class="desc">' + escapeHtml(desc) + '</span><div class="row"><span class="count">Possédés : ' + quantity + '</span><span class="price' + (affordable ? '' : ' too-expensive') + '">' + formatNumber(price) + ' crédits</span></div>';
@@ -3839,8 +3884,13 @@
         html += '<div class="upgrade-milestone">' +
           '<div class="upgrade-milestone-bar"><span style="width:' +
             Math.round((avance / producerMilestoneStep()) * 100) + '%"></span></div>' +
-          '<span class="upgrade-milestone-label">Encore <b>' + reste + '</b> pour le palier ×' +
-            producerMilestoneLabel(producerMilestoneMult(quantity) * producerMilestoneBase()) + '</span>' +
+          '<span class="upgrade-milestone-label">Encore <b>' + reste + '</b> pour ' +
+            (quantity === 0
+              // Au tout premier achat, on énonce la règle : « palier » ne veut
+              // rien dire tant qu'on ne l'a pas lue une fois.
+              ? 'un palier : tous les ' + producerMilestoneStep() + ' achetés, leur production double'
+              : 'doubler leur production') +
+            '</span>' +
           '</div>';
       }
       html += '</button>';
@@ -4204,6 +4254,7 @@
     switch (activeTab) {
       case 'accueil':
         renderClickValue();
+        renderSkillCard();
         renderAgencyScene();
         renderChapterGoal();
         renderIntern();
@@ -4249,6 +4300,7 @@
     renderReputation();
     renderChapter();
     renderSkillBadge();
+    renderSkillCard();
     renderAgencyScene();
     renderChapterGoal();
     renderIntern();
@@ -4678,6 +4730,7 @@
     // devenait alors inatteignable — or on doit pouvoir le consulter à tout
     // moment, ne serait-ce que pour savoir vers quoi on épargne.
     document.getElementById('header-level')?.addEventListener('click', openSkillModal);
+    document.getElementById('skill-card')?.addEventListener('click', openSkillModal);
     document.getElementById('skill-modal-close')?.addEventListener('click', closeSkillModal);
     document.getElementById('skill-modal')?.addEventListener('click', function (e) {
       if (e.target === this) closeSkillModal();
