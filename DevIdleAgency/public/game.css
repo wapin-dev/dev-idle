@@ -2341,3 +2341,49 @@ body.eureka-active[data-event] #agency-scene .agency-svg { filter: none; }
 }
 
 .skill-card[data-dispo="true"] .skill-card-cta { color: #fbbf24; }
+
+/* ===== Présentations ======================================================
+   En tête de l'accueil, pas en modale : elles expliquent, elles n'interrompent
+   pas. Une seule à la fois, les suivantes attendent leur tour. */
+.hint-card {
+  display: block;
+  margin: 0 0 14px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(165, 180, 252, 0.45);
+  background: linear-gradient(140deg, rgba(99, 102, 241, 0.18), rgba(45, 27, 105, 0.25));
+  animation: intern-card-enter 0.45s ease-out;
+}
+
+.hint-card[hidden] { display: none !important; }
+
+.hint-titre {
+  margin: 0 0 6px;
+  font-size: 0.86rem;
+  font-weight: 800;
+  color: #c7d2fe;
+}
+
+.hint-texte {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: #e6e8f5;
+}
+
+.hint-ok {
+  margin-top: 11px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(199, 210, 254, 0.5);
+  background: rgba(255, 255, 255, 0.06);
+  color: #c7d2fe;
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hint-card { animation: none; }
+}

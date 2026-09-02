@@ -53,7 +53,8 @@ function instrument(version) {
     "    SKILL_TREE, SKILL_BRANCHES, skillCost, canUnlockSkill, unlockSkill,\n" +
     "    isSkillUnlocked, getSkillEffects, getClickPower, addXP, getXpToNextLevel,\n" +
     "    doPrestige, checkLevelUp, EVENTS, startEvent, endEvent, onEventAction,\n" +
-    "    eventActionCost, EVENT_MIN_INTERVAL_MS, EVENT_MAX_INTERVAL_MS };\n})();");
+    "    eventActionCost, EVENT_MIN_INTERVAL_MS, EVENT_MAX_INTERVAL_MS,\n" +
+    "    HINTS, showHint, dismissHint, applyChapterReward, getChapterDef };\n})();");
 }
 
 function boot(seed, { migrations = null, version = undefined } = {}) {
@@ -658,6 +659,54 @@ function bootAvecPromo() {
   // `npm run equilibrage`.
   const dernier = t.CHAPTERS[t.CHAPTERS.length - 1];
   check('chapitres : le dernier but reste lointain', true, dernier.goal.target >= 1e9);
+}
+
+// 38. Les présentations ne se montrent qu'une fois
+{
+  const { t, window } = boot(undefined);
+  const carte = window.document.getElementById('hint-card');
+  check('présentation : rien au départ', true, carte.hidden);
+
+  t.showHint('eureka');
+  check('présentation : affichée', false, carte.hidden);
+  check('présentation : c\'est bien la bonne', true,
+    carte.textContent.includes(t.HINTS.eureka.titre));
+
+  t.dismissHint();
+  check('présentation : refermée', true, carte.hidden);
+  check('présentation : retenue comme lue', true, t.state.seenHints.includes('eureka'));
+
+  t.showHint('eureka');
+  check('présentation : ne revient pas', true, carte.hidden);
+}
+
+// 39. Elles font la queue au lieu de s'écraser
+{
+  const { t, window } = boot(undefined);
+  const carte = window.document.getElementById('hint-card');
+  // Un retour hors-ligne peut en déclencher plusieurs d'un coup : la seconde
+  // ne doit pas remplacer la première avant qu'elle ait été lue.
+  t.showHint('eureka');
+  t.showHint('decision');
+  check('queue : la première d\'abord', true, carte.textContent.includes(t.HINTS.eureka.titre));
+  t.dismissHint();
+  check('queue : la seconde ensuite', true, carte.textContent.includes(t.HINTS.decision.titre));
+  t.dismissHint();
+  check('queue : plus rien après', true, carte.hidden);
+  check('queue : les deux retenues', 2, t.state.seenHints.length);
+}
+
+// 40. Chaque système que le joueur découvre a sa présentation
+{
+  const { t } = boot(undefined);
+  // Le joueur a demandé où était l'arbre, puis ce que voulait dire « palier ».
+  // Ce test garde la liste : retirer une présentation sans la remplacer, c'est
+  // rendre un système muet à nouveau.
+  const attendues = ['boutique', 'stagiaires', 'eureka', 'decision', 'competences', 'events', 'prestige'];
+  const manquantes = attendues.filter(id => !t.HINTS[id]);
+  check('présentations : aucune ne manque', [], manquantes);
+  const vides = Object.entries(t.HINTS).filter(([, h]) => !h.titre || !h.texte || h.texte.length < 40);
+  check('présentations : toutes disent quelque chose', [], vides.map(([k]) => k));
 }
 
 const echecs = results.filter(r => !r.ok);

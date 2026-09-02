@@ -954,6 +954,8 @@
     skillPoints: 0,
     /** Compétences débloquées. Survit au Rebranding, comme les chapitres. */
     skills: [],
+    /** Présentations déjà lues. Elles survivent au Rebranding : on n'oublie pas. */
+    seenHints: [],
     /** Le stagiaire en stage, ou null. Voir le bloc « Les stagiaires ». */
     intern: null,
     /** Les 3 candidats d'une promo en attente de choix, ou null. */
@@ -1364,13 +1366,11 @@
     state.pendingLevelUp = false;
     renderSkillBadge();
     renderSkillCard();
-    // Au premier point, on dit où aller : la pastille seule ne suffit pas à
-    // faire comprendre qu'on peut la toucher.
-    const premier = (state.skills || []).length === 0 && (state.skillPoints || 0) <= gagnes;
+    // La présentation explique où aller ; le toast n'a plus qu'à annoncer.
+    showHint('competences');
     showToast('Niveau ' + state.playerLevel + ' — ' +
       (gagnes > 1 ? gagnes + ' points de compétence' : '1 point de compétence') +
-      (premier ? ' ! Touche ton niveau, en haut, pour ouvrir l\'arbre.' : ' à dépenser.'),
-      premier ? 5200 : 3200);
+      ' à dépenser.', 3200);
     save();
   }
 
@@ -1765,6 +1765,9 @@
     state.unlockedFeatures = state.unlockedFeatures || [];
     (ch.unlocks || []).forEach(function (f) {
       if (state.unlockedFeatures.indexOf(f) < 0) state.unlockedFeatures.push(f);
+      // Ces deux-là n'ont pas de moment « à l'écran » propre : leur ouverture
+      // EST le moment. Les autres attendent que la chose apparaisse vraiment.
+      if (f === 'boutique' || f === 'prestige') showHint(f);
     });
   }
 
@@ -2028,6 +2031,7 @@
         // La modale ne s'ouvre plus d'elle-même : c'était la seule interruption
         // forcée du jeu, et elle tombait à chaque fin de stage. La carte
         // d'accueil passe en mode « décision » et attend — elle n'expire jamais.
+        showHint('decision');
         showToast('Le stage de ' + state.intern.name + ' est terminé. À toi de décider.', 4000);
       }
       return;
@@ -2037,7 +2041,9 @@
     if (now >= state.nextInternDraftAt) {
       openInternDraft();
       renderIntern();
-      showToast('Une promo de ' + INTERN_DRAFT_SIZE + ' stagiaires t\'attend.', 3500);
+      showHint('stagiaires');
+      showToast('Une promo de ' + (state.internDraft.candidates || []).length +
+        ' stagiaires t\'attend.', 3500);
     }
   }
 
@@ -2097,6 +2103,7 @@
     state.activeEvent = ev;
     state.eventEndsAt = Date.now() + ev.duration;
     state.eventActionUsed = false;
+    showHint('events');
     const banner = document.getElementById('event-banner');
     const textEl = document.getElementById('event-text');
     const timerEl = document.getElementById('event-timer');
@@ -2303,6 +2310,7 @@
         gameCompleted: state.gameCompleted,
         skillPoints: state.skillPoints,
         skills: state.skills,
+        seenHints: state.seenHints,
         prestigeBonusLevels: state.prestigeBonusLevels,
         intern: state.intern,
         internDraft: state.internDraft,
@@ -2482,6 +2490,7 @@
       if (typeof data.gameCompleted === 'boolean') state.gameCompleted = data.gameCompleted;
       if (typeof data.skillPoints === 'number') state.skillPoints = data.skillPoints;
       if (Array.isArray(data.skills)) state.skills = data.skills.filter(getSkillDef);
+      if (Array.isArray(data.seenHints)) state.seenHints = data.seenHints;
       invalidateSkillEffects();
       if (data.prestigeBonusLevels) state.prestigeBonusLevels = data.prestigeBonusLevels;
       if (data.intern && typeof data.intern === 'object') state.intern = data.intern;
@@ -3510,6 +3519,90 @@
     if (banner) banner.hidden = !isEurekaActive();
   }
 
+  /* ==========================================================================
+     Les présentations
+
+     Le jeu n'expliquait rien. Le joueur a demandé où était l'arbre de
+     compétences, puis ce que voulait dire « palier » — deux systèmes qu'il
+     avait sous les yeux depuis des heures. Un joueur du Play Store n'aura pas
+     le code sous la main pour comprendre.
+
+     Une phrase, la première fois que le mécanisme apparaît VRAIMENT à l'écran —
+     pas au chapitre qui l'ouvre, un écran plus tôt. Chaque présentation ne se
+     montre qu'une fois, se ferme d'un bouton, et n'interrompt rien : c'est une
+     carte en tête de l'accueil, pas une modale.
+
+     Elles survivent au Rebranding : on n'oublie pas ce qu'on a appris.
+     ========================================================================== */
+
+  const HINTS = {
+    boutique: {
+      titre: 'La Boutique est ouverte',
+      texte: 'Chaque personne que tu recrutes produit des crédits en continu, même quand tu ne regardes pas. Tous les 25 du même métier, leur production double.',
+    },
+    stagiaires: {
+      titre: 'Une promo se présente',
+      texte: 'Trois candidats, tu n\'en gardes qu\'un — les autres partent. Regarde autant leur trait que leur rareté : un bon trait vaut une rareté de plus.',
+    },
+    eureka: {
+      titre: 'C\'était un Eurêka',
+      texte: 'Ton stagiaire vient de multiplier toute la production de l\'agence pendant quelques secondes. Seuls les profils rares en déclenchent — c\'est ce qu\'on paie en les choisissant.',
+    },
+    decision: {
+      titre: 'Le stage est fini',
+      texte: 'L\'embaucher coûte des crédits mais laisse un bonus de production définitif. Le laisser partir ne coûte rien, et n\'apporte rien. Rien ne presse : la décision t\'attend indéfiniment.',
+    },
+    competences: {
+      titre: 'Tu as un point de compétence',
+      texte: 'Chaque niveau t\'en donne un. L\'arbre est volontairement plus grand que ce que tu pourras t\'offrir : tu ne le rempliras pas, tu choisiras une voie.',
+    },
+    events: {
+      titre: 'Un événement',
+      texte: 'Ça dure quelques secondes et ça change ta production. Les mauvais peuvent être réglés tout de suite contre des crédits — ou simplement encaissés.',
+    },
+    prestige: {
+      titre: 'Le Rebranding est ouvert',
+      texte: 'Il remet tes producteurs et ton niveau à zéro. Mais tu gardes tes chapitres, ton arbre de compétences et ta réputation — c\'est ce qui te fait repartir bien plus vite.',
+    },
+  };
+
+  /** Les présentations en attente d'être lues, dans l'ordre où elles sont venues. */
+  var hintQueue = [];
+
+  function showHint(id) {
+    if (!HINTS[id]) return;
+    if ((state.seenHints || []).indexOf(id) >= 0) return;
+    if (hintQueue.indexOf(id) >= 0) return;
+    hintQueue.push(id);
+    renderHintCard();
+  }
+
+  function dismissHint() {
+    const id = hintQueue.shift();
+    if (id) {
+      state.seenHints = state.seenHints || [];
+      if (state.seenHints.indexOf(id) < 0) state.seenHints.push(id);
+      save();
+    }
+    renderHintCard();
+  }
+
+  function renderHintCard() {
+    const card = document.getElementById('hint-card');
+    if (!card) return;
+    const id = hintQueue[0];
+    if (!id) { card.hidden = true; rendered.hintId = null; return; }
+    card.hidden = false;
+    if (rendered.hintId === id) return;
+    rendered.hintId = id;
+    const h = HINTS[id];
+    card.innerHTML =
+      '<p class="hint-titre">' + escapeHtml(h.titre) + '</p>' +
+      '<p class="hint-texte">' + escapeHtml(h.texte) + '</p>' +
+      '<button type="button" class="hint-ok" id="hint-ok">J\'ai compris</button>';
+    card.querySelector('#hint-ok').addEventListener('click', dismissHint);
+  }
+
   /* --- L'arbre de compétences : affichage --- */
 
   /**
@@ -3720,6 +3813,7 @@
       setTimeout(function () { el.remove(); }, 2200);
     }
     document.body.classList.add('eureka-active');
+    showHint('eureka');
     showToast((state.intern ? state.intern.name : 'Ton stagiaire') + ' a trouvé quelque chose. Production x' +
       (state.intern ? state.intern.eurekaMultiplier : 1) + ' !', 4000);
   }
@@ -4254,6 +4348,7 @@
     switch (activeTab) {
       case 'accueil':
         renderClickValue();
+        renderHintCard();
         renderSkillCard();
         renderAgencyScene();
         renderChapterGoal();
@@ -4301,6 +4396,7 @@
     renderChapter();
     renderSkillBadge();
     renderSkillCard();
+    renderHintCard();
     renderAgencyScene();
     renderChapterGoal();
     renderIntern();
