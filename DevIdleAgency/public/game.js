@@ -777,6 +777,16 @@
   // la valeur affichée change.
   var rendered = {};
   function resetRenderCache() { rendered = {}; }
+
+  /**
+   * Ce que le joueur a effectivement *vu* dans la scène de l'agence, par métier.
+   * Volontairement hors de `rendered` : cette cache-là est vidée à chaque
+   * changement d'onglet et par `renderAll()`, or c'est précisément en revenant
+   * de la Boutique qu'il faut savoir ce qui est nouveau. `null` = jamais rendu,
+   * auquel cas rien n'est animé — sinon toute la pièce rejouerait son entrée au
+   * premier affichage.
+   */
+  var sceneSeenCounts = null;
   function isTabActive(name) { return activeTab === name; }
 
   function randomId() {
@@ -2772,6 +2782,287 @@
   }
 
   /* ==========================================================================
+     La scène de l'agence — le retour visuel des achats
+
+     Le joueur voyait ses achats comme des lignes de texte dans une liste. La
+     scène montre l'agence : un poste de plus par embauche, un décor qui change
+     quand on achète un bureau. C'est le seul endroit du jeu où un achat produit
+     autre chose qu'un chiffre qui monte.
+
+     Tout est dessiné en SVG plutôt qu'en images : aucun fichier à charger, net
+     sur toutes les densités d'écran, et les couleurs restent celles du thème.
+
+     La hauteur suit le contenu — une agence à un stagiaire tient en une rangée.
+     Sans ça, l'écran d'accueil serait occupé dès le départ par une pièce vide.
+     ========================================================================== */
+
+  /** Postes dessinés au maximum par métier ; au-delà, une pastille « ×N ». */
+  const SCENE_MAX_SLOTS = 8;
+  const SCENE_W = 400;
+  const SCENE_WALL_H = 68;
+  const SCENE_ROW_H = 46;
+  const SCENE_PITCH = 34;
+
+  /**
+   * Le CTO, la baie de serveurs et la machine à café vivent dans les marges,
+   * pas au milieu des bureaux : posés en coordonnées fixes, ils passaient
+   * par-dessus les postes dès que l'agence se remplissait. Chaque marge n'est
+   * réservée que si quelque chose l'occupe — sinon les rangées prennent toute
+   * la largeur.
+   */
+  const SCENE_GUTTER_L = 56;
+  const SCENE_GUTTER_R = 52;
+
+  /**
+   * Les rangées, du fond vers l'avant. Les stagiaires sont au fond : ce sont
+   * les plus nombreux, ils font la masse. Les seniors sont au premier plan,
+   * là où le regard tombe — ce sont eux que le joueur a payé le plus cher.
+   */
+  const SCENE_ROWS = [
+    { id: 'stagiaire', color: '#a5b4fc', screen: '#6366f1', depth: 0.82 },
+    { id: 'dev', color: '#c4b5fd', screen: '#8b5cf6', depth: 0.92 },
+    { id: 'devSenior', color: '#fcd34d', screen: '#f59e0b', depth: 1 },
+  ];
+
+  /** Le décor de fond, du garage au campus. Le dernier bureau possédé gagne. */
+  const SCENE_BACKDROPS = ['garage', 'openSpace', 'centreVille', 'campusTech'];
+
+  function sceneQty(id) {
+    return getUpgradeState(id)?.quantity || 0;
+  }
+
+  function sceneBackdropId() {
+    if ((getOfficeState('campusTech')?.quantity || 0) > 0) return 'campusTech';
+    if ((getOfficeState('centreVille')?.quantity || 0) > 0) return 'centreVille';
+    if ((getOfficeState('openSpace')?.quantity || 0) > 0) return 'openSpace';
+    return 'garage';
+  }
+
+  /** Un poste de travail complet : personnage, écran, bureau. */
+  function sceneDesk(x, y, row, nouveau, delai) {
+    const cls = 'agency-unit' + (nouveau ? ' agency-pop' : '');
+    const style = nouveau ? ' style="animation-delay:' + delai + 'ms"' : '';
+    return '<g class="' + cls + '"' + style + ' transform="translate(' + x + ',' + y + ')">' +
+      // Le personnage est derrière l'écran : la tête dépasse, le buste est masqué
+      // par le moniteur, ce qui suffit à donner la profondeur sans perspective.
+      '<circle cx="15" cy="-27" r="5" fill="' + row.color + '"/>' +
+      '<rect x="9" y="-21" width="12" height="11" rx="4.5" fill="' + row.color + '" opacity="0.85"/>' +
+      '<rect x="6" y="-17" width="18" height="12" rx="2" fill="#0f0c1c"/>' +
+      '<rect x="7.5" y="-15.5" width="15" height="9" rx="1" fill="' + row.screen + '" opacity="0.9"/>' +
+      '<rect x="14" y="-5" width="2" height="2.5" fill="#0f0c1c"/>' +
+      '<rect x="2" y="-3" width="26" height="3.5" rx="1.75" fill="#2d2545"/>' +
+      '<rect x="4.5" y="0.5" width="2" height="7" rx="1" fill="#221c38"/>' +
+      '<rect x="23.5" y="0.5" width="2" height="7" rx="1" fill="#221c38"/>' +
+      '</g>';
+  }
+
+  /** La pastille qui remplace les postes non dessinés. */
+  function sceneOverflow(x, y, n, color) {
+    return '<g transform="translate(' + x + ',' + y + ')">' +
+      '<rect x="1" y="-24" width="28" height="16" rx="8" fill="#0f0c1c" stroke="' + color + '" stroke-width="1"/>' +
+      '<text x="15" y="-13" text-anchor="middle" class="agency-count" fill="' + color + '">×' + n + '</text>' +
+      '</g>';
+  }
+
+  /** La baie de serveurs, calée dans la marge droite. Ses diodes clignotent. */
+  function sceneServers(n) {
+    const x = SCENE_W - SCENE_GUTTER_R + 8;
+    const y = SCENE_WALL_H + 10;
+    let leds = '';
+    for (let i = 0; i < Math.min(n, 8); i++) {
+      leds += '<rect class="agency-led" style="animation-delay:' + (i * 200) + 'ms" ' +
+        'x="' + (x + 6 + (i % 2) * 10) + '" y="' + (y + 9 + Math.floor(i / 2) * 9) + '" ' +
+        'width="5" height="4" rx="1" fill="#22d3ee"/>';
+    }
+    return '<g class="agency-unit">' +
+      '<rect x="' + x + '" y="' + y + '" width="30" height="48" rx="3" fill="#1b1730" stroke="#2d2545"/>' +
+      leds +
+      '<text x="' + (x + 15) + '" y="' + (y + 60) + '" text-anchor="middle" class="agency-count" fill="#22d3ee">×' + n + '</text>' +
+      '</g>';
+  }
+
+  /** Le bureau du CTO : une silhouette seule dans son coin, ouverte par le campus. */
+  function sceneCto() {
+    const y = SCENE_WALL_H + 10;
+    return '<g class="agency-unit">' +
+      '<rect x="8" y="' + y + '" width="42" height="46" rx="4" fill="#1b1730" opacity="0.75" stroke="#3b2f63"/>' +
+      '<circle cx="29" cy="' + (y + 15) + '" r="6" fill="#f472b6"/>' +
+      '<rect x="21" y="' + (y + 23) + '" width="16" height="13" rx="5.5" fill="#f472b6" opacity="0.85"/>' +
+      '<text x="29" y="' + (y + 44) + '" text-anchor="middle" class="agency-tag" fill="#f472b6">CTO</text>' +
+      '</g>';
+  }
+
+  /**
+   * Le fond : c'est lui qui dit où en est l'agence avant même de compter les
+   * têtes. Le garage n'a qu'une ampoule ; le campus a des baies vitrées.
+   */
+  function sceneBackdrop(id) {
+    const sol = '<rect x="0" y="' + SCENE_WALL_H + '" width="' + SCENE_W + '" height="400" fill="url(#agSol)"/>' +
+      '<rect x="0" y="' + SCENE_WALL_H + '" width="' + SCENE_W + '" height="1.5" fill="#3b2f63" opacity="0.8"/>';
+    let mur = '<rect x="0" y="0" width="' + SCENE_W + '" height="' + SCENE_WALL_H + '" fill="url(#agMur)"/>';
+
+    if (id === 'garage') {
+      mur += '<line x1="200" y1="0" x2="200" y2="14" stroke="#3b2f63" stroke-width="1"/>' +
+        '<circle cx="200" cy="20" r="6" fill="#fbbf24" opacity="0.85"/>' +
+        '<circle cx="200" cy="20" r="16" fill="#fbbf24" opacity="0.12"/>' +
+        '<path d="M64 10 l8 16 l-5 10" stroke="#3b2f63" stroke-width="1.2" fill="none" opacity="0.6"/>' +
+        // Une étagère et deux cartons : sans eux le garage est un rectangle vide,
+        // et la scène a l'air cassée tant qu'on n'a que deux ou trois postes.
+        '<rect x="286" y="30" width="76" height="3" rx="1.5" fill="#2d2545"/>' +
+        '<rect x="294" y="18" width="14" height="12" rx="1" fill="#3b2f63"/>' +
+        '<rect x="312" y="21" width="10" height="9" rx="1" fill="#2d2545"/>' +
+        '<rect x="330" y="16" width="12" height="14" rx="1" fill="#332a55"/>' +
+        '<rect x="42" y="44" width="22" height="20" rx="2" fill="#2d2545"/>' +
+        '<rect x="42" y="52" width="22" height="1.5" fill="#3b2f63"/>' +
+        '<rect x="66" y="50" width="16" height="14" rx="2" fill="#241f3d"/>';
+    } else if (id === 'openSpace') {
+      mur += '<rect x="70" y="14" width="90" height="5" rx="2.5" fill="#e0e7ff" opacity="0.5"/>' +
+        '<rect x="240" y="14" width="90" height="5" rx="2.5" fill="#e0e7ff" opacity="0.5"/>' +
+        '<rect x="60" y="34" width="110" height="22" rx="3" fill="#1b1730" stroke="#3b2f63"/>' +
+        '<rect x="230" y="34" width="110" height="22" rx="3" fill="#1b1730" stroke="#3b2f63"/>';
+    } else {
+      // Centre-ville et campus partagent la baie vitrée : c'est le saut visuel
+      // qui marque le passage du garage aux vrais locaux.
+      mur += '<rect x="30" y="10" width="340" height="48" rx="4" fill="#0b1020"/>' +
+        '<g opacity="0.9">' +
+        '<rect x="46" y="30" width="18" height="28" fill="#1e2a4a"/><rect x="50" y="34" width="4" height="4" fill="#fbbf24" opacity="0.8"/>' +
+        '<rect x="72" y="20" width="14" height="38" fill="#243357"/><rect x="76" y="26" width="3" height="3" fill="#a5b4fc" opacity="0.8"/>' +
+        '<rect x="96" y="36" width="22" height="22" fill="#1e2a4a"/><rect x="102" y="41" width="4" height="4" fill="#fbbf24" opacity="0.6"/>' +
+        '<rect x="128" y="24" width="16" height="34" fill="#243357"/><rect x="133" y="30" width="3" height="3" fill="#a5b4fc" opacity="0.7"/>' +
+        '<rect x="156" y="34" width="20" height="24" fill="#1e2a4a"/>' +
+        '<rect x="188" y="18" width="15" height="40" fill="#243357"/><rect x="192" y="24" width="3" height="3" fill="#fbbf24" opacity="0.8"/>' +
+        '<rect x="214" y="32" width="24" height="26" fill="#1e2a4a"/><rect x="220" y="38" width="4" height="4" fill="#a5b4fc" opacity="0.6"/>' +
+        '<rect x="250" y="26" width="16" height="32" fill="#243357"/>' +
+        '<rect x="278" y="36" width="20" height="22" fill="#1e2a4a"/><rect x="284" y="41" width="4" height="4" fill="#fbbf24" opacity="0.7"/>' +
+        '<rect x="308" y="22" width="14" height="36" fill="#243357"/><rect x="312" y="28" width="3" height="3" fill="#a5b4fc" opacity="0.8"/>' +
+        '<rect x="334" y="34" width="20" height="24" fill="#1e2a4a"/>' +
+        '</g>' +
+        '<rect x="30" y="10" width="340" height="48" rx="4" fill="none" stroke="#3b2f63" stroke-width="1.5"/>' +
+        '<line x1="200" y1="10" x2="200" y2="58" stroke="#3b2f63" stroke-width="1.5"/>';
+      if (id === 'campusTech') {
+        // La plante et le néon : le campus doit se voir au premier coup d'œil.
+        mur += '<path d="M14 58 q-6 -16 4 -22 q10 6 4 22 z" fill="#34d399" opacity="0.8"/>' +
+          '<path d="M18 58 q8 -14 16 -10 q-4 12 -14 10 z" fill="#34d399" opacity="0.55"/>' +
+          '<rect x="12" y="57" width="14" height="8" rx="2" fill="#2d2545"/>' +
+          '<rect x="356" y="16" width="30" height="4" rx="2" fill="#22d3ee" opacity="0.8"/>' +
+          '<rect x="356" y="16" width="30" height="4" rx="2" fill="#22d3ee" opacity="0.3" class="agency-neon"/>';
+      }
+    }
+    return mur + sol;
+  }
+
+  /** Les achats d'image accrochés au mur : logo, machine à café, campagne. */
+  function sceneBranding() {
+    let out = '';
+    if ((getBrandingState('logo')?.quantity || 0) > 0) {
+      out += '<g class="agency-unit"><rect x="180" y="24" width="26" height="26" rx="3" fill="#1b1730" stroke="#a78bfa"/>' +
+        '<path d="M187 43 l6 -12 l6 12 z" fill="#a78bfa"/></g>';
+    }
+    if ((getBrandingState('linkedin')?.quantity || 0) > 0) {
+      out += '<g class="agency-unit"><rect x="216" y="26" width="22" height="22" rx="3" fill="#1b1730" stroke="#60a5fa"/>' +
+        '<rect x="221" y="36" width="3" height="8" fill="#60a5fa"/><rect x="221" y="31" width="3" height="3" fill="#60a5fa"/>' +
+        '<path d="M228 44 v-8 q4 -2 5 3 v5" stroke="#60a5fa" stroke-width="2" fill="none"/></g>';
+    }
+    return out;
+  }
+
+  /** La machine à café, en bas de la marge gauche, sous le bureau du CTO. */
+  function sceneCafe(hauteur) {
+    if (!((getBrandingState('cafe')?.quantity || 0) > 0)) return '';
+    const y = hauteur - 34;
+    return '<g class="agency-unit">' +
+      '<rect x="16" y="' + y + '" width="20" height="28" rx="3" fill="#2d2545" stroke="#3b2f63"/>' +
+      '<rect x="20" y="' + (y + 5) + '" width="12" height="8" rx="1" fill="#fbbf24" opacity="0.7"/>' +
+      '<rect x="21" y="' + (y + 18) + '" width="10" height="5" rx="1" fill="#a5b4fc"/>' +
+      '</g>';
+  }
+
+  /**
+   * Redessine la scène. Comme le reste de l'interface, elle ne reconstruit son
+   * DOM que si quelque chose a changé : au repos, la boucle ne fait rien ici.
+   *
+   * Les postes qui viennent d'apparaître reçoivent la classe d'animation, les
+   * autres non — sans ça, toute la pièce rejouerait son entrée à chaque achat.
+   */
+  function renderAgencyScene() {
+    const el = document.getElementById('agency-scene');
+    if (!el) return;
+    // On achète depuis la Boutique, où la scène n'est pas visible. Si on la
+    // redessinait là, le poste serait déjà en place au retour sur l'accueil et
+    // l'achat ne se verrait jamais. On laisse donc la scène en retard tant que
+    // l'onglet n'est pas affiché : elle rattrape, animation comprise, au retour.
+    if (!isTabActive('accueil')) return;
+
+    const counts = {};
+    SCENE_ROWS.forEach((r) => { counts[r.id] = sceneQty(r.id); });
+    const serveurs = sceneQty('serveur');
+    const cto = sceneQty('cto');
+    const backdrop = sceneBackdropId();
+    const brand = ['logo', 'linkedin', 'cafe'].map((b) => (getBrandingState(b)?.quantity || 0) > 0 ? 1 : 0).join('');
+    const sig = [backdrop, brand, serveurs, cto, SCENE_ROWS.map((r) => counts[r.id]).join(',')].join('|');
+    if (rendered.sceneSig === sig) return;
+    const avant = sceneSeenCounts;
+    rendered.sceneSig = sig;
+    sceneSeenCounts = Object.assign({}, counts);
+
+    const actives = SCENE_ROWS.filter((r) => counts[r.id] > 0);
+    const hauteur = SCENE_WALL_H + Math.max(actives.length, 1) * SCENE_ROW_H + 8;
+
+    const cafe = (getBrandingState('cafe')?.quantity || 0) > 0;
+    const xMin = (cto > 0 || cafe) ? SCENE_GUTTER_L : 10;
+    const xMax = serveurs > 0 ? SCENE_W - SCENE_GUTTER_R : SCENE_W - 10;
+
+    let corps = sceneBackdrop(backdrop) + sceneBranding() + sceneCafe(hauteur);
+    if (serveurs > 0) corps += sceneServers(serveurs);
+    if (cto > 0) corps += sceneCto();
+
+    if (!actives.length) {
+      // Une agence vide reste une agence : un bureau inoccupé vaut mieux qu'un
+      // trou, et il donne envie de le remplir.
+      corps += '<g opacity="0.45">' +
+        '<rect x="180" y="' + (hauteur - 24) + '" width="42" height="4" rx="2" fill="#2d2545"/>' +
+        '<rect x="184" y="' + (hauteur - 20) + '" width="2.5" height="9" rx="1" fill="#221c38"/>' +
+        '<rect x="217" y="' + (hauteur - 20) + '" width="2.5" height="9" rx="1" fill="#221c38"/>' +
+        '</g>' +
+        '<text x="200" y="' + (hauteur - 32) + '" text-anchor="middle" class="agency-empty">Personne, pour l\'instant.</text>';
+    }
+
+    actives.forEach((row, i) => {
+      const y = SCENE_WALL_H + i * SCENE_ROW_H + 42;
+      const n = counts[row.id];
+      const deja = avant ? (avant[row.id] || 0) : 0;
+      const dessines = Math.min(n, n > SCENE_MAX_SLOTS ? SCENE_MAX_SLOTS - 1 : SCENE_MAX_SLOTS);
+      // La rangée est centrée entre les marges : alignée à gauche, trois postes
+      // se tassaient dans un coin avec une pièce vide à côté.
+      const cases = dessines + (n > SCENE_MAX_SLOTS ? 1 : 0);
+      const x0 = xMin + Math.max(0, ((xMax - xMin) - cases * SCENE_PITCH) / 2);
+      let g = '';
+      for (let k = 0; k < dessines; k++) {
+        // Nouveau = ce poste n'était pas là la dernière fois que le joueur a
+        // regardé. Le décalage fait entrer les postes l'un après l'autre quand
+        // on en achète plusieurs d'affilée.
+        const nouveau = avant !== null && k >= deja;
+        g += sceneDesk(x0 + k * SCENE_PITCH, y, row, nouveau, (k - deja) * 70);
+      }
+      if (n > SCENE_MAX_SLOTS) {
+        g += sceneOverflow(x0 + dessines * SCENE_PITCH, y, n - dessines, row.color);
+      }
+      corps += '<g opacity="' + row.depth + '">' + g + '</g>';
+    });
+
+    el.innerHTML =
+      '<svg class="agency-svg" viewBox="0 0 ' + SCENE_W + ' ' + hauteur + '" ' +
+      'preserveAspectRatio="xMidYMax meet" role="img" aria-label="' +
+      'Ton agence : ' + SCENE_ROWS.map((r) => counts[r.id] + ' ' + getUpgradeDef(r.id).name).join(', ') + '">' +
+      '<defs>' +
+      '<linearGradient id="agMur" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0%" stop-color="#241f3d"/><stop offset="100%" stop-color="#1a1630"/></linearGradient>' +
+      '<linearGradient id="agSol" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0%" stop-color="#151126"/><stop offset="100%" stop-color="#0d0a1a"/></linearGradient>' +
+      '</defs>' + corps + '</svg>';
+  }
+
+  /* ==========================================================================
      Les stagiaires — affichage
      ========================================================================== */
 
@@ -3502,6 +3793,7 @@
     switch (activeTab) {
       case 'accueil':
         renderClickValue();
+        renderAgencyScene();
         renderChapterGoal();
         renderIntern();
         renderQuests();
@@ -3545,6 +3837,7 @@
     renderClickValue();
     renderReputation();
     renderChapter();
+    renderAgencyScene();
     renderChapterGoal();
     renderIntern();
     renderQuests();
@@ -3697,6 +3990,7 @@
       lastUiRefresh = nowMs;
       renderEventTimer();
       if (isTabActive('accueil')) {
+        renderAgencyScene();
         renderChapterGoal();
         updateQuestsProgress();
         renderIntern();

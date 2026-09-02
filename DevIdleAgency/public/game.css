@@ -1876,3 +1876,87 @@ body.tapstorm-theme #game-screen .tapstorm-nav .tab-btn[hidden] {
   line-height: 1.4;
   color: var(--text-muted);
 }
+
+/* ===== La scène de l'agence ================================================
+   Elle vit en tête de l'accueil et grandit avec l'agence. Les couleurs sont
+   écrites en dur dans le SVG plutôt qu'en variables : `style.css` est chargé
+   après ce fichier et y redéfinit `--text`, on ne veut pas que la scène en
+   dépende. */
+.agency-scene {
+  display: block;
+  margin: 0 0 14px;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(139, 92, 246, 0.28);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+  background: #131024;
+  animation: intern-card-enter 0.45s ease-out;
+}
+
+.agency-scene[hidden] { display: none !important; }
+
+.agency-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.agency-count {
+  font-size: 10px;
+  font-weight: 800;
+  font-family: inherit;
+}
+
+.agency-tag {
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  font-family: inherit;
+}
+
+.agency-empty {
+  font-size: 11px;
+  font-weight: 600;
+  fill: #6f6791;
+  font-family: inherit;
+}
+
+/* Un poste qui vient d'être acheté entre en scène. C'est tout l'intérêt de la
+   vue : l'achat doit se voir, pas seulement s'ajouter à un total. */
+.agency-pop {
+  transform-box: fill-box;
+  transform-origin: bottom center;
+  animation: agency-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+}
+
+@keyframes agency-pop {
+  0% { opacity: 0; transform: translateY(10px) scale(0.6); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.agency-led {
+  animation: agency-led 1.8s ease-in-out infinite;
+}
+
+@keyframes agency-led {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
+.agency-neon {
+  animation: agency-neon 2.4s ease-in-out infinite;
+}
+
+@keyframes agency-neon {
+  0%, 100% { opacity: 0.15; }
+  50% { opacity: 0.6; }
+}
+
+/* Le mouvement permanent (diodes, néon) n'a rien d'informatif : il disparaît
+   pour qui demande moins d'animations. L'entrée d'un poste reste, en instantané. */
+@media (prefers-reduced-motion: reduce) {
+  .agency-led,
+  .agency-neon,
+  .agency-scene { animation: none; }
+  .agency-pop { animation-duration: 0.01ms; }
+}
