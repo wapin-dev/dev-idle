@@ -608,6 +608,24 @@ function bootAvecPromo() {
     moyenneEvent >= t.INTERN_STAGE_MS + t.INTERN_COOLDOWN_MS);
 }
 
+// 36. Tout effet déclaré dans l'arbre doit être lu par le jeu
+{
+  const { t } = boot(undefined);
+  // Trois nœuds — c6, c7 et s8, soit 13 points — ont été livrés avec un effet
+  // que rien ne consommait : les acheter ne faisait strictement rien. Un effet
+  // qui n'apparaît qu'une fois dans la source n'existe que dans sa définition.
+  const cles = new Set();
+  t.SKILL_TREE.forEach(n => Object.keys(n.effect || {}).forEach(k => cles.add(k)));
+  const orphelins = [...cles].filter(k => {
+    const occurrences = src.split(k).length - 1;
+    // Une occurrence par nœud qui le déclare, plus celle de getSkillEffects() :
+    // au-delà, quelque chose le lit vraiment.
+    const declarations = t.SKILL_TREE.filter(n => n.effect && k in n.effect).length;
+    return occurrences <= declarations + 1;
+  });
+  check('arbre : aucun effet déclaré sans être lu', [], orphelins);
+}
+
 const echecs = results.filter(r => !r.ok);
 results.forEach(r => console.log((r.ok ? '  OK  ' : ' ÉCHEC') + '  ' + r.nom +
   (r.ok ? '' : `\n         attendu ${JSON.stringify(r.attendu)}, obtenu ${JSON.stringify(r.obtenu)}`)));

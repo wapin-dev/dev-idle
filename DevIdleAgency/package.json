@@ -13,7 +13,8 @@
     "cap:add:ios": "cap add ios",
     "cap:sync": "npm run build && cap sync",
     "cap:open:android": "cap open android",
-    "cap:open:ios": "cap open ios"
+    "cap:open:ios": "cap open ios",
+    "equilibrage": "node tools/equilibrage.mjs"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.5.0",

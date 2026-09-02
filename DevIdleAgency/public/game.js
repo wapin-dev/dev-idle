@@ -570,39 +570,39 @@
     /* --- Production --- */
     { id: 'p1', branch: 'prod', tier: 1, name: 'Second écran', desc: '+5% de production.', requires: null, effect: { prodPercent: 5 } },
     { id: 'p2', branch: 'prod', tier: 1, name: 'Chaises correctes', desc: '+5% de production.', requires: null, effect: { prodPercent: 5 } },
-    { id: 'p3', branch: 'prod', tier: 2, name: 'Revue de code', desc: '+12% de production.', requires: 'p1', effect: { prodPercent: 12 } },
-    { id: 'p4', branch: 'prod', tier: 2, name: 'Machine à café d\'étage', desc: '+12% de production.', requires: 'p2', effect: { prodPercent: 12 } },
-    { id: 'p5', branch: 'prod', tier: 3, name: 'Intégration continue', desc: '+25% de production.', requires: 'p3', effect: { prodPercent: 25 } },
-    { id: 'p6', branch: 'prod', tier: 3, name: 'Paliers rapprochés', desc: 'Les paliers de producteur tombent tous les 20 au lieu de 25.', requires: 'p4', effect: { milestoneStepReduction: 5 } },
-    { id: 'p7', branch: 'prod', tier: 4, name: 'Culture d\'ingénierie', desc: 'Production ×1,5.', requires: 'p5', effect: { prodMultiplier: 0.5 } },
-    { id: 'p8', branch: 'prod', tier: 4, name: 'Usine logicielle', desc: 'Les paliers doublent un peu plus fort (×2,2 au lieu de ×2).', requires: 'p6', effect: { milestoneBase: 0.2 } },
+    { id: 'p3', branch: 'prod', tier: 2, name: 'Revue de code', desc: '+10% de production.', requires: 'p1', effect: { prodPercent: 10 } },
+    { id: 'p4', branch: 'prod', tier: 2, name: 'Machine à café d\'étage', desc: '+10% de production.', requires: 'p2', effect: { prodPercent: 10 } },
+    { id: 'p5', branch: 'prod', tier: 3, name: 'Intégration continue', desc: '+15% de production.', requires: 'p3', effect: { prodPercent: 15 } },
+    { id: 'p6', branch: 'prod', tier: 3, name: 'Paliers rapprochés', desc: 'Les paliers de producteur tombent tous les 22 au lieu de 25.', requires: 'p4', effect: { milestoneStepReduction: 3 } },
+    { id: 'p7', branch: 'prod', tier: 4, name: 'Culture d\'ingénierie', desc: 'Production ×1,3.', requires: 'p5', effect: { prodMultiplier: 0.3 } },
+    { id: 'p8', branch: 'prod', tier: 4, name: 'Usine logicielle', desc: 'Production ×1,3.', requires: 'p6', effect: { prodMultiplier: 0.3 } },
 
     /* --- Clic --- */
-    { id: 'c1', branch: 'click', tier: 1, name: 'Raccourcis clavier', desc: '+15% par clic.', requires: null, effect: { clickPercent: 15 } },
-    { id: 'c2', branch: 'click', tier: 1, name: 'Mécanique bleue', desc: '+15% par clic.', requires: null, effect: { clickPercent: 15 } },
-    { id: 'c3', branch: 'click', tier: 2, name: 'Rythme de croisière', desc: '+40% par clic.', requires: 'c1', effect: { clickPercent: 40 } },
-    { id: 'c4', branch: 'click', tier: 2, name: 'Commit atomique', desc: '+40% par clic.', requires: 'c2', effect: { clickPercent: 40 } },
-    { id: 'c5', branch: 'click', tier: 3, name: 'Flow', desc: '+100% par clic.', requires: 'c3', effect: { clickPercent: 100 } },
-    { id: 'c6', branch: 'click', tier: 3, name: 'Livraison continue', desc: 'Chaque clic rapporte en plus 1 seconde de production passive.', requires: 'c4', effect: { clickProdSeconds: 1 } },
-    { id: 'c7', branch: 'click', tier: 4, name: 'Dix doigts', desc: 'Chaque clic rapporte 3 secondes de production au lieu d\'une.', requires: 'c6', effect: { clickProdSeconds: 2 } },
+    { id: 'c1', branch: 'click', tier: 1, name: 'Raccourcis clavier', desc: 'Chaque clic rapporte en plus 0,15 s de production.', requires: null, effect: { clickProdSeconds: 0.15 } },
+    { id: 'c2', branch: 'click', tier: 1, name: 'Mécanique bleue', desc: 'Chaque clic rapporte en plus 0,15 s de production.', requires: null, effect: { clickProdSeconds: 0.15 } },
+    { id: 'c3', branch: 'click', tier: 2, name: 'Rythme de croisière', desc: 'Chaque clic rapporte en plus 0,3 s de production.', requires: 'c1', effect: { clickProdSeconds: 0.3 } },
+    { id: 'c4', branch: 'click', tier: 2, name: 'Commit atomique', desc: 'Chaque clic rapporte en plus 0,3 s de production.', requires: 'c2', effect: { clickProdSeconds: 0.3 } },
+    { id: 'c5', branch: 'click', tier: 3, name: 'Flow', desc: 'Chaque clic rapporte en plus 0,7 s de production.', requires: 'c3', effect: { clickProdSeconds: 0.7 } },
+    { id: 'c6', branch: 'click', tier: 3, name: 'Livraison continue', desc: 'Chaque clic rapporte en plus 0,6 s de production.', requires: 'c4', effect: { clickProdSeconds: 0.6 } },
+    { id: 'c7', branch: 'click', tier: 4, name: 'Dix doigts', desc: 'Chaque clic rapporte en plus 1,1 s de production.', requires: 'c6', effect: { clickProdSeconds: 1.1 } },
 
     /* --- Stagiaires --- */
-    { id: 's1', branch: 'intern', tier: 1, name: 'Annonce soignée', desc: 'Les stages durent 15% de moins.', requires: null, effect: { internStagePercent: -15 } },
-    { id: 's2', branch: 'intern', tier: 1, name: 'Bureau d\'accueil', desc: 'Embaucher coûte 20% de moins.', requires: null, effect: { internHirePercent: -20 } },
-    { id: 's3', branch: 'intern', tier: 2, name: 'Mentorat', desc: '+30% de chance d\'Eurêka.', requires: 's1', effect: { internEurekaChancePercent: 30 } },
-    { id: 's4', branch: 'intern', tier: 2, name: 'Prime d\'embauche', desc: 'Le bonus définitif laissé par un embauché est majoré de moitié.', requires: 's2', effect: { internHireBonusPercent: 50 } },
-    { id: 's5', branch: 'intern', tier: 3, name: 'Eurêka prolongé', desc: 'Les Eurêka durent 40% plus longtemps.', requires: 's3', effect: { internEurekaMsPercent: 40 } },
-    { id: 's6', branch: 'intern', tier: 3, name: 'Partenariat école', desc: 'Les promos arrivent deux fois plus vite.', requires: 's4', effect: { internCooldownPercent: -50 } },
-    { id: 's7', branch: 'intern', tier: 4, name: 'Réseau d\'écoles', desc: 'Une promo présente 4 candidats au lieu de 3.', requires: 's5', effect: { internDraftSize: 1 } },
+    { id: 's1', branch: 'intern', tier: 1, name: 'Tutorat', desc: 'Le stagiaire en poste produit 100% de plus.', requires: null, effect: { internProdPercent: 100 } },
+    { id: 's2', branch: 'intern', tier: 1, name: 'Bureau d\'accueil', desc: 'Embaucher coûte 40% de moins.', requires: null, effect: { internHirePercent: -40 } },
+    { id: 's3', branch: 'intern', tier: 2, name: 'Mentorat', desc: '+50% de chance d\'Eurêka.', requires: 's1', effect: { internEurekaChancePercent: 50 } },
+    { id: 's4', branch: 'intern', tier: 2, name: 'Prime d\'embauche', desc: 'Le bonus définitif laissé par un embauché est majoré de moitié.', requires: 's2', effect: { internHireBonusPercent: 150 } },
+    { id: 's5', branch: 'intern', tier: 3, name: 'Eurêka prolongé', desc: 'Les Eurêka durent 60% plus longtemps.', requires: 's3', effect: { internEurekaMsPercent: 60 } },
+    { id: 's6', branch: 'intern', tier: 3, name: 'Partenariat école', desc: 'Les promos arrivent 35% plus vite.', requires: 's4', effect: { internCooldownPercent: -35 } },
+    { id: 's7', branch: 'intern', tier: 4, name: 'Réseau d\'écoles', desc: 'Une promo présente 5 candidats au lieu de 3.', requires: 's5', effect: { internDraftSize: 2 } },
     { id: 's8', branch: 'intern', tier: 4, name: 'Chasseur de têtes', desc: 'Les Pépites sortent deux fois plus souvent.', requires: 's6', effect: { internRarityBoost: 1 } },
 
     /* --- Absence & Rebranding --- */
-    { id: 'm1', branch: 'meta', tier: 1, name: 'Astreinte', desc: '+15% de rendement pendant ton absence.', requires: null, effect: { offlinePercent: 15 } },
-    { id: 'm2', branch: 'meta', tier: 1, name: 'Sauvegarde continue', desc: 'L\'absence est créditée jusqu\'à 12 h au lieu de 8.', requires: null, effect: { offlineCapHours: 4 } },
-    { id: 'm3', branch: 'meta', tier: 2, name: 'Équipe de nuit', desc: '+30% de rendement pendant ton absence.', requires: 'm1', effect: { offlinePercent: 30 } },
-    { id: 'm4', branch: 'meta', tier: 2, name: 'Notoriété', desc: '+30% de réputation gagnée au Rebranding.', requires: 'm2', effect: { reputationPercent: 30 } },
-    { id: 'm5', branch: 'meta', tier: 3, name: 'Trésorerie', desc: 'Tu gardes 10% de tes crédits au Rebranding.', requires: 'm3', effect: { headstartPercent: 10 } },
-    { id: 'm6', branch: 'meta', tier: 3, name: 'Agence reconnue', desc: '+60% de réputation gagnée au Rebranding.', requires: 'm4', effect: { reputationPercent: 60 } },
+    { id: 'm1', branch: 'meta', tier: 1, name: 'Astreinte', desc: '+30% de rendement pendant ton absence.', requires: null, effect: { offlinePercent: 30 } },
+    { id: 'm2', branch: 'meta', tier: 1, name: 'Sauvegarde continue', desc: 'L\'absence est créditée jusqu\'à 14 h au lieu de 8.', requires: null, effect: { offlineCapHours: 6 } },
+    { id: 'm3', branch: 'meta', tier: 2, name: 'Équipe de nuit', desc: '+70% de rendement pendant ton absence.', requires: 'm1', effect: { offlinePercent: 70 } },
+    { id: 'm4', branch: 'meta', tier: 2, name: 'Bureau distant', desc: '+60% de rendement pendant ton absence.', requires: 'm2', effect: { offlinePercent: 60 } },
+    { id: 'm5', branch: 'meta', tier: 3, name: 'Équipe permanente', desc: '+160% de rendement pendant ton absence, et 6 h créditées de plus.', requires: 'm3', effect: { offlinePercent: 160, offlineCapHours: 6 } },
+    { id: 'm6', branch: 'meta', tier: 3, name: 'Agence reconnue', desc: '+80% de réputation au Rebranding, et l\'absence créditée 6 h de plus.', requires: 'm4', effect: { reputationPercent: 80, offlineCapHours: 6 } },
     { id: 'm7', branch: 'meta', tier: 4, name: 'Héritage', desc: 'Tu gardes 25% de tes crédits au Rebranding.', requires: 'm5', effect: { headstartPercent: 15 } },
   ];
 
@@ -636,7 +636,7 @@
       milestoneStepReduction: 0, milestoneBase: 0,
       internStagePercent: 0, internHirePercent: 0, internEurekaChancePercent: 0,
       internEurekaMsPercent: 0, internHireBonusPercent: 0, internCooldownPercent: 0,
-      internDraftSize: 0, internRarityBoost: 0,
+      internDraftSize: 0, internRarityBoost: 0, internProdPercent: 0,
       offlinePercent: 0, offlineCapHours: 0, reputationPercent: 0, headstartPercent: 0,
     };
     (state.skills || []).forEach((id) => {
@@ -839,8 +839,16 @@
   const INTERN_EUREKA_ROLL_MS = 20 * 1000;
   /** Plancher du coût d'embauche, pour que le tout début de partie reste jouable. */
   const INTERN_HIRE_COST_MIN = 250;
-  /** Le coût d'embauche vaut ~4 min de production, multiplié par la rareté. */
-  const INTERN_HIRE_COST_SECONDS = 240;
+  /**
+   * Le coût d'embauche, en secondes de production, multiplié par la rareté.
+   *
+   * Il valait 240 s. Mesuré sur l'économie réelle : **zéro embauche en trois
+   * heures** — un joueur qui réinvestit ses crédits dans des producteurs n'a
+   * jamais quatre à seize minutes de revenus en caisse au bon moment. Tout ce
+   * que le stagiaire promet (le bonus définitif) ne se matérialisait donc
+   * jamais, et le but du chapitre 4 était un mur.
+   */
+  const INTERN_HIRE_COST_SECONDS = 90;
   /** Un stagiaire embauché laisse son bonus à l'agence : on garde la liste courte. */
   const INTERN_ROSTER_MAX = 12;
 
@@ -1480,6 +1488,18 @@
     return total * GLOBAL_PRODUCTION_SCALE;
   }
 
+  /**
+   * Ce qu'un clic rapporte en plus de sa valeur propre : une fraction de la
+   * production passive. Sans ça, la voie Clic est morte passé les premières
+   * minutes — un clic vaut 1 crédit quand l'agence en produit des millions par
+   * seconde, et un « +100% par clic » ne se voit sur aucun compteur.
+   */
+  function getClickProdBonus() {
+    const sec = getSkillEffects().clickProdSeconds;
+    if (!sec) return 0;
+    return getProductionPerSecond() * sec;
+  }
+
   function getClickPower() {
     let mult = 1;
     const levelClick = (state.levelBonuses.clickPercent || 0) + (state.prestigeBonuses.clickPercent || 0);
@@ -1658,7 +1678,7 @@
 
   function addCredits() {
     // Toujours basé sur le pouvoir de clic effectif (multiplicateurs inclus)
-    const finalAmount = Math.max(1, Math.floor(getClickPower()) || 1);
+    const finalAmount = Math.max(1, Math.floor(getClickPower() + getClickProdBonus()) || 1);
     state.credits = (state.credits || 0) + finalAmount;
     state.totalCreditsEarned = (state.totalCreditsEarned || 0) + finalAmount;
     addXP(XP_PER_CLICK);
@@ -1806,10 +1826,16 @@
 
   function pickInternRarityId() {
     const ids = Object.keys(INTERN_RARITIES);
-    const total = ids.reduce((sum, id) => sum + INTERN_RARITIES[id].weight, 0);
+    // Le boost de l'arbre pèse sur les raretés qui déclenchent des Eurêka, donc
+    // sur les profils rares : doubler leur poids revient à les voir deux fois
+    // plus souvent, sans jamais fermer la porte aux Communs.
+    const boost = 1 + getSkillEffects().internRarityBoost;
+    const poids = (id) => INTERN_RARITIES[id].weight *
+      (INTERN_RARITIES[id].eurekaChance > 0 ? boost : 1);
+    const total = ids.reduce((sum, id) => sum + poids(id), 0);
     let roll = Math.random() * total;
     for (const id of ids) {
-      roll -= INTERN_RARITIES[id].weight;
+      roll -= poids(id);
       if (roll <= 0) return id;
     }
     return ids[0];
@@ -1908,7 +1934,7 @@
   /** Bonus de production du stagiaire en stage. Nul une fois le stage terminé. */
   function getInternProdPercent() {
     if (!state.intern || isInternStageOver()) return 0;
-    return state.intern.prodPercent || 0;
+    return (state.intern.prodPercent || 0) * (1 + getSkillEffects().internProdPercent / 100);
   }
 
   function getEurekaMultiplier() {
@@ -4426,7 +4452,7 @@
   }
 
   function showClickProfitAnimation(clientX, clientY) {
-    var amount = Math.max(1, Math.floor(getClickPower()) || 1);
+    var amount = Math.max(1, Math.floor(getClickPower() + getClickProdBonus()) || 1);
     var el = document.createElement('div');
     el.className = 'click-profit-popup';
     el.textContent = '+' + formatNumber(amount);
